@@ -10,26 +10,41 @@ def parse_hackathon_dates(date_str: str):
     - 'May 26 - Jul 10, 2025' (different months)
     - 'Jul 10 - 20, 2025' (same month)
     - 'Jul 10, 2025' (single day)
+    - 'Nov 25, 2025 - Jan 12, 2026' (different years)
+    - 'Jan 06 - 08, 2026' (same month, different days)
     """
     if not date_str or not isinstance(date_str, str):
         return None, None
-
     try:
         if ' - ' in date_str:
             start_str, end_str = date_str.split(' - ')
             
-            year = end_str.split(',')[-1].strip()
+            start_str = start_str.strip()
+            end_str = end_str.strip()
             
             month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-            has_month = any(month in end_str for month in month_names)
+            
+            # Determine Year for Start Date
+            # If start_str has a comma, it likely has the year (e.g., "Nov 25, 2025")
+            if "," in start_str:
+                full_start_str = start_str
+            else:
+                # If no year in start, take it from end_str
+                if "," in end_str:
+                    year = end_str.split(',')[-1].strip()
+                    full_start_str = f"{start_str}, {year}"
+                else:
+                    # Fallback if no year found anywhere (unlikely for Devpost)
+                    full_start_str = start_str
 
-            if has_month:
-                full_start_str = f"{start_str}, {year}"
+            # Determine Month for End Date
+            end_has_month = any(month in end_str for month in month_names)
+            if end_has_month:
                 full_end_str = end_str
             else:
-                month = start_str.split(' ')[0]
-                full_start_str = f"{start_str}, {year}"
-                full_end_str = f"{month} {end_str}"
+                # If no month in end, take it from start_str
+                start_month = start_str.split(' ')[0]
+                full_end_str = f"{start_month} {end_str}"
 
             start_date = datetime.strptime(full_start_str, "%b %d, %Y").date()
             end_date = datetime.strptime(full_end_str, "%b %d, %Y").date()
@@ -37,7 +52,8 @@ def parse_hackathon_dates(date_str: str):
         else:
             date = datetime.strptime(date_str, "%b %d, %Y").date()
             return date, date
-    except (ValueError, IndexError):
+    except (ValueError, IndexError) as e:
+        # print(f"Error parsing date '{date_str}': {e}")
         return None, None
 
 def fetch_devpost_hackathons() -> list[Hackathon]:
@@ -92,6 +108,7 @@ def fetch_devpost_hackathons() -> list[Hackathon]:
             except ValidationError as e:
                 print(f"Skipping hackathon due to validation error: {item.get('title')}")
                 print(e)
+    print(f"Fetched {len(hackathons)} hackathons from devpost.")
     return hackathons
 
 if __name__ == "__main__":
