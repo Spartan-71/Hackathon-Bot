@@ -6,7 +6,7 @@ from adapters.devpost import fetch_devpost_hackathons
 from adapters.unstop import fetch_unstop_hackathons
 from adapters.dorahacks import fetch_dorahacks_hackathons
 from adapters.mlh import scrape_mlh_events
-from adapters.devfolio import scrape_devfolio_hackathons
+from adapters.devfolio import fetch_devfolio_hackathons
 
 from backend.db import SessionLocal, Base, engine
 from backend.crud import upsert_hackathon
@@ -34,7 +34,6 @@ def process_source(source_name, fetch_func):
                     db_obj, is_new = upsert_hackathon(db, h)
                     if is_new:
                         new_hackathons.append(h)
-                        logging.info(f"New hackathon added from {source_name}: {h.title}")
                 except (SQLAlchemyError, OperationalError) as e:
                     logging.error(f"Database error upserting hackathon from {source_name}: {e}")
                     db.rollback()
@@ -73,7 +72,7 @@ def run():
         ("Devpost", fetch_devpost_hackathons),
         ("Unstop", fetch_unstop_hackathons),
         ("DoraHacks", fetch_dorahacks_hackathons),
-        ("Devfolio", scrape_devfolio_hackathons),
+        ("Devfolio", fetch_devfolio_hackathons),
     ]
     all_new_hackathons = []
     
