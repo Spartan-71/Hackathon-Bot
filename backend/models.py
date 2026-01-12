@@ -20,3 +20,13 @@ class HackathonDB(Base):
 
     def __repr__(self):
         return f"<Hackathon(title='{self.title}', start_date='{self.start_date}')>"
+
+
+class GuildConfig(Base):
+    __tablename__ = "guild_configs"
+
+    guild_id = Column(String, primary_key=True, index=True)
+    channel_id = Column(String, nullable=False)
+
+    def __repr__(self):
+        return f"<GuildConfig(guild_id='{self.guild_id}', channel_id='{self.channel_id}')>"
