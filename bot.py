@@ -11,6 +11,8 @@ from dotenv import load_dotenv
 from fetch_and_store import run as fetch_and_store_hackathons
 # from backend.db import Base, engine
 import backend.models
+from backend.models import GuildConfig
+from backend.db import SessionLocal
 
 load_dotenv()
 
@@ -32,7 +34,11 @@ class MyClient(discord.Client):
 
     async def on_ready(self):
 
-        print(f"Logged on as {self.user}")
+        print(f'Bot is in {len(bot.guilds)} servers:')
+        for guild in self.guilds:
+            print(f'- {guild.name} (ID: {guild.id})')
+            print(f'  Channels: {len(guild.text_channels)}')
+            print(f"Logged on as {self.user}")
         
         # Sync commands after bot is ready - sync to each guild for instant updates
     
@@ -40,11 +46,11 @@ class MyClient(discord.Client):
             # Sync to each guild for instant updates (faster than global sync)
             for guild in self.guilds:
                 try:
-                    synced = await self.tree.sync(guild=guild)
-                    print(f"Synced {len(synced)} commands to {guild.name}")
+                    self.tree.clear_commands(guild=guild)
+                    await self.tree.sync(guild=guild)
+                    print(f"Cleared guild commands for {guild.name}")
                 except Exception as e:
-
-                    print(f"Failed to sync commands to {guild.name}: {e}")
+                    print(f"Failed to clear commands for {guild.name}: {e}")
             
             # Also sync globally (takes up to 1 hour but ensures commands work everywhere)
  
@@ -54,12 +60,23 @@ class MyClient(discord.Client):
         except Exception as e:
             print(f"Error syncing commands: {e}")
 
+    async def on_guild_join(self, guild):
+        """Sync commands when joining a new guild."""
+        print(f"Joined new guild: {guild.name} ({guild.id})")
+        try:
+            self.tree.copy_global_to(guild=guild)
+            synced = await self.tree.sync(guild=guild)
+            print(f"Synced {len(synced)} commands to {guild.name}")
+        except Exception as e:
+            print(f"Failed to sync commands to {guild.name}: {e}")
+
 
 client = MyClient(intents=intents)
 
 
 @client.tree.command(name="hi", description="Say hi")
 async def hi(interaction: discord.Interaction):
+
 
     welcome_msg = (
         "👋 **Hello there!**\n\n"
@@ -110,6 +127,45 @@ async def fetch(interaction: discord.Interaction):
         await interaction.followup.send(error_msg)
         logging.error(f"Error in manual fetch command: {e}")
 
+
+@client.tree.command(name="set_channel", description="Set the channel for hackathon notifications")
+@app_commands.describe(channel="The channel to send notifications to")
+@app_commands.checks.has_permissions(administrator=True)
+async def set_channel(interaction: discord.Interaction, channel: discord.TextChannel):
+    """Set the preferred channel for hackathon notifications."""
+    await interaction.response.defer(thinking=True)
+    
+    try:
+        db = SessionLocal()
+        guild_id = str(interaction.guild_id)
+        channel_id = str(channel.id)
+        
+        # Check if config exists
+        config = db.query(GuildConfig).filter(GuildConfig.guild_id == guild_id).first()
+        
+        if config:
+            config.channel_id = channel_id
+        else:
+            config = GuildConfig(guild_id=guild_id, channel_id=channel_id)
+            db.add(config)
+            
+        db.commit()
+        db.close()
+        
+        await interaction.followup.send(f"✅ Notifications will now be sent to {channel.mention}")
+        logging.info(f"Set notification channel for guild {guild_id} to {channel_id}")
+        
+    except Exception as e:
+        await interaction.followup.send(f"❌ Error setting channel: {str(e)}")
+        logging.error(f"Error in set_channel command: {e}")
+
+@set_channel.error
+async def set_channel_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message("❌ You need Administrator permissions to use this command.", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"❌ An error occurred: {str(error)}", ephemeral=True)
+
 def format_hackathon_embed(hackathon):
     """Create a Discord embed for a hackathon notification."""
 
@@ -134,7 +190,7 @@ def format_hackathon_embed(hackathon):
 async def send_hackathon_notifications(bot: MyClient, new_hackathons, target_channel=None):
     """
     Send hackathon notifications to channels.
-    If target_channel is provided, send there. Otherwise, send to all guilds.
+    If target_channel is provided, send there. Otherwise, send to all guilds using configured or default channels.
     """
     if not new_hackathons:
         return
@@ -150,14 +206,29 @@ async def send_hackathon_notifications(bot: MyClient, new_hackathons, target_cha
                 logging.error(f"Failed to send hackathon notification to channel {target_channel.id}: {e}")
     else:
         # Send to all guilds (for scheduled task)
+        db = SessionLocal()
+        
         for guild in bot.guilds:
             channel = None
+            
+            # 1. Check for configured channel in DB
+            try:
+                config = db.query(GuildConfig).filter(GuildConfig.guild_id == str(guild.id)).first()
+                if config:
+                    channel = guild.get_channel(int(config.channel_id))
+                    if channel and not channel.permissions_for(guild.me).send_messages:
+                        logging.warning(f"Configured channel {channel.id} in guild {guild.id} is not writable")
+                        channel = None # Fallback to auto-detection
+            except Exception as e:
+                logging.error(f"Error fetching guild config for {guild.id}: {e}")
 
-            # Prefer the system channel if available
-            if guild.system_channel and guild.system_channel.permissions_for(guild.me).send_messages:
-                channel = guild.system_channel
-            else:
-                # Fallback: first text channel where the bot can send messages
+            # 2. Fallback: Prefer the system channel if available
+            if channel is None:
+                if guild.system_channel and guild.system_channel.permissions_for(guild.me).send_messages:
+                    channel = guild.system_channel
+            
+            # 3. Fallback: first text channel where the bot can send messages
+            if channel is None:
                 for ch in guild.text_channels:
                     if ch.permissions_for(guild.me).send_messages:
                         channel = ch
@@ -175,6 +246,8 @@ async def send_hackathon_notifications(bot: MyClient, new_hackathons, target_cha
                     logging.info(f"Sent notification for hackathon '{hackathon.title}' to guild {guild.id}")
                 except Exception as e:
                     logging.error(f"Failed to send hackathon notification in guild {guild.id}: {e}")
+        
+        db.close()
 
 
 @tasks.loop(hours=12)  # Run every 12 hours (adjust as needed: seconds=30, minutes=5, hours=12, etc.)
