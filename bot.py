@@ -263,7 +263,7 @@ def format_hackathon_embed(hackathon):
     # Register button
     if hackathon.url:
         view.add_item(discord.ui.Button(
-            label="🚀 Register Now",
+            label="🚀 Check Details",
             url=hackathon.url,
             style=discord.ButtonStyle.link
         ))
