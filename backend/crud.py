@@ -104,3 +104,23 @@ def get_hackathons_by_platform(db: Session, platform_name: str, limit: int = 3):
     except SQLAlchemyError as e:
         logging.error(f"Database error in get_hackathons_by_platform: {e}")
         return []
+
+from datetime import timedelta
+
+def get_upcoming_hackathons(db: Session, days: int = 7):
+    """
+    Get hackathons starting within the next 'days' days.
+    """
+    try:
+        today = date.today()
+        end_date = today + timedelta(days=days)
+        
+        results = db.query(HackathonDB)\
+            .filter(HackathonDB.start_date >= today)\
+            .filter(HackathonDB.start_date <= end_date)\
+            .order_by(HackathonDB.start_date.asc())\
+            .all()
+        return results
+    except SQLAlchemyError as e:
+        logging.error(f"Database error in get_upcoming_hackathons: {e}")
+        return []

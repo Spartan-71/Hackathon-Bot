@@ -1,6 +1,7 @@
 import os
 import logging
 import json
+import random
 from datetime import datetime
 
 import discord
@@ -13,7 +14,7 @@ from fetch_and_store import run as fetch_and_store_hackathons
 import backend.models
 from backend.models import GuildConfig, HackathonDB
 from backend.db import SessionLocal
-from backend.crud import search_hackathons, get_hackathons_by_platform
+from backend.crud import search_hackathons, get_hackathons_by_platform, get_upcoming_hackathons
 
 load_dotenv()
 
@@ -232,11 +233,41 @@ async def platform(interaction: discord.Interaction, name: str, count: int = 3):
     else:
         pass
 
+
+@client.tree.command(name="upcoming", description="Get hackathons starting in the next X days")
+@app_commands.describe(days="Number of days to look ahead (default 7)")
+async def upcoming(interaction: discord.Interaction, days: int = 7):
+    """Get hackathons starting in the next X days"""
+    await interaction.response.defer(thinking=True)
+    
+    db = SessionLocal()
+    try:
+        results = get_upcoming_hackathons(db, days)
+    finally:
+        db.close()
+    
+    if not results:
+        await interaction.followup.send(
+            f"❌ No upcoming hackathons found in the next **{days}** days.",
+            ephemeral=True
+        )
+        return
+    
+    await interaction.followup.send(f"📅 Found **{len(results)}** upcoming hackathon(s) in the next **{days}** days:")
+    
+    # Use the shared notification function
+    if interaction.channel:
+        await send_hackathon_notifications(client, results, target_channel=interaction.channel)
+    else:
+        pass
+
 def format_hackathon_embed(hackathon):
     """Create a Discord embed for a hackathon notification."""
 
     # Plain markdown with bold keys and highlighted values
-    msg = f"## 🎉 New Hackathon: **{hackathon.title}**\n\n"
+    emojis = ["🎉", "🚀", "💡", "🔥", "💻", "🏆", "🌟", "⚡", "🔮", "🛠️"]
+    random_emoji = random.choice(emojis)
+    msg = f"# {random_emoji} **{hackathon.title}**\n\n"
     msg += f"---\n"
     msg += f"**Duration:** {hackathon.start_date.strftime('%B %d')} - {hackathon.end_date.strftime('%B %d, %Y')}\n"
     msg += f"**Location:** {hackathon.location}\n"
