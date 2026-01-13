@@ -13,7 +13,7 @@ from fetch_and_store import run as fetch_and_store_hackathons
 import backend.models
 from backend.models import GuildConfig, HackathonDB
 from backend.db import SessionLocal
-from backend.crud import search_hackathons
+from backend.crud import search_hackathons, get_hackathons_by_platform
 
 load_dotenv()
 
@@ -202,6 +202,34 @@ async def search(interaction: discord.Interaction, keyword: str):
         # But usually interaction.channel is available.
         # If not, we can iterate and send as followup, but user asked to use the function.
         # Let's try to get channel from interaction.
+        pass
+
+
+@client.tree.command(name="platform", description="Get latest hackathons from a specific platform")
+@app_commands.describe(name="Platform name (e.g., unstop, devfolio)", count="Number of results to return (default 3)")
+async def platform(interaction: discord.Interaction, name: str, count: int = 3):
+    """Get hackathons from a specific platform"""
+    await interaction.response.defer(thinking=True)
+    
+    db = SessionLocal()
+    try:
+        results = get_hackathons_by_platform(db, name, count)
+    finally:
+        db.close()
+    
+    if not results:
+        await interaction.followup.send(
+            f"❌ No hackathons found for platform **{name}**",
+            ephemeral=True
+        )
+        return
+    
+    await interaction.followup.send(f"🔍 Found **{len(results)}** hackathon(s) from **{name}**:")
+    
+    # Use the shared notification function
+    if interaction.channel:
+        await send_hackathon_notifications(client, results, target_channel=interaction.channel)
+    else:
         pass
 
 def format_hackathon_embed(hackathon):

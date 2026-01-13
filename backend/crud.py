@@ -74,7 +74,7 @@ def get_upcoming(db: Session, from_date=None, to_date=None, sources=None):
         logging.error(f"Database error in get_upcoming: {e}")
         raise
 
-def search_hackathons(db: Session, keyword: str, limit: int = 5):
+def search_hackathons(db: Session, keyword: str, limit: int = 3):
     try:
         # Case insensitive search using ilike
         search_term = f"%{keyword}%"
@@ -82,4 +82,25 @@ def search_hackathons(db: Session, keyword: str, limit: int = 5):
         return results
     except SQLAlchemyError as e:
         logging.error(f"Database error in search_hackathons: {e}")
+        return []
+
+from datetime import date
+
+def get_hackathons_by_platform(db: Session, platform_name: str, limit: int = 3):
+    """
+    Get hackathons from a specific platform (source).
+    Returns upcoming hackathons ordered by start date (soonest first).
+    """
+    try:
+        # Case insensitive search on the source column
+        # Filter for hackathons starting today or in the future
+        # Order by start_date ascending (soonest first)
+        results = db.query(HackathonDB)\
+            .filter(HackathonDB.source.ilike(f"%{platform_name}%"))\
+            .filter(HackathonDB.start_date >= date.today())\
+            .order_by(HackathonDB.start_date.asc())\
+            .limit(limit).all()
+        return results
+    except SQLAlchemyError as e:
+        logging.error(f"Database error in get_hackathons_by_platform: {e}")
         return []
