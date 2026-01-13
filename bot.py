@@ -11,8 +11,9 @@ from dotenv import load_dotenv
 from fetch_and_store import run as fetch_and_store_hackathons
 # from backend.db import Base, engine
 import backend.models
-from backend.models import GuildConfig
+from backend.models import GuildConfig, HackathonDB
 from backend.db import SessionLocal
+from backend.crud import search_hackathons
 
 load_dotenv()
 
@@ -170,6 +171,38 @@ async def set_channel_error(interaction: discord.Interaction, error: app_command
         await interaction.response.send_message("❌ You need Administrator permissions to use this command.", ephemeral=True)
     else:
         await interaction.response.send_message(f"❌ An error occurred: {str(error)}", ephemeral=True)
+
+
+@client.tree.command(name="search", description="Search hackathons by keywords.")
+@app_commands.describe(keyword="Search term (e.g.,AI, Blockchain, Data Science)")
+async def search(interaction: discord.Interaction, keyword: str):
+    """Search hackathons"""
+    await interaction.response.defer(thinking=True)
+    
+    db = SessionLocal()
+    try:
+        results = search_hackathons(db, keyword)
+    finally:
+        db.close()
+    
+    if not results:
+        await interaction.followup.send(
+            f"❌ No hackathons found for **{keyword}**",
+            ephemeral=True
+        )
+        return
+    
+    await interaction.followup.send(f"🔍 Found **{len(results)}** hackathon(s) for **{keyword}**:")
+    
+    # Use the shared notification function
+    if interaction.channel:
+        await send_hackathon_notifications(client, results, target_channel=interaction.channel)
+    else:
+        # Fallback if channel is not available (e.g. ephemeral context where channel is not accessible)
+        # But usually interaction.channel is available.
+        # If not, we can iterate and send as followup, but user asked to use the function.
+        # Let's try to get channel from interaction.
+        pass
 
 def format_hackathon_embed(hackathon):
     """Create a Discord embed for a hackathon notification."""

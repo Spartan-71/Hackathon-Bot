@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from sqlalchemy.exc import SQLAlchemyError
 from backend.models import HackathonDB
 from backend.schemas import Hackathon
@@ -72,3 +73,13 @@ def get_upcoming(db: Session, from_date=None, to_date=None, sources=None):
     except SQLAlchemyError as e:
         logging.error(f"Database error in get_upcoming: {e}")
         raise
+
+def search_hackathons(db: Session, keyword: str, limit: int = 5):
+    try:
+        # Case insensitive search using ilike
+        search_term = f"%{keyword}%"
+        results = db.query(HackathonDB).filter(HackathonDB.tags.ilike(search_term)).limit(limit).all()
+        return results
+    except SQLAlchemyError as e:
+        logging.error(f"Database error in search_hackathons: {e}")
+        return []
