@@ -85,14 +85,31 @@ client = MyClient(intents=intents)
 async def hi(interaction: discord.Interaction):
 
 
-    welcome_msg = (
-        "👋 **Hello there!**\n\n"
-        "I'm **HackRadar**, your personal hackathon assistant! 🚀\n"
-        "I can help you find the latest hackathons from **Devpost**, **MLH**, **Devfolio**, and more.\n\n"
-        "Use `/fetch` to manually check for new hackathons right now!\n"
-        "I also run in the background to keep you updated automatically. Happy Hacking! 💻✨"
+    """Say hi and introduce the bot."""
+    embed = discord.Embed(
+        title="👋 Hello! I'm HackRadar 🚀",
+        description="I'm your personal AI assistant for tracking hackathons! I monitor platforms like **Devpost**, **MLH**, and **Devfolio** to bring you the latest opportunities.",
+        color=discord.Color.green()
     )
-    await interaction.response.send_message(welcome_msg)
+    
+    embed.add_field(
+        name="✨ Key Commands",
+        value=(
+            "• **/help**: View the full command guide 📚\n"
+            "• **/fetch**: Check for new hackathons instantly 🔄\n"
+            "• **/search**: Find hackathons by topic 🔍\n"
+            "• **/subscribe**: Get alerts for your favorite themes 🔔"
+        ),
+        inline=False
+    )
+    
+    embed.add_field(
+        name="💡 Tip",
+        value="I also run in the background to keep you updated automatically. Happy Hacking! 💻",
+        inline=False
+    )
+
+    await interaction.response.send_message(embed=embed)
 
 
 @client.tree.command(name="fetch", description=
