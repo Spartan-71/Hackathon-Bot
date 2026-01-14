@@ -302,6 +302,32 @@ async def unsubscribe(interaction: discord.Interaction, theme: str):
         db.close()
 
 
+@client.tree.command(name="help", description="Show the command guide and usage examples")
+async def help(interaction: discord.Interaction):
+    """Show the command guide."""
+    embed = discord.Embed(
+        title="🛠️ HackRadar Command Guide",
+        description="Here are the commands you can use to interact with HackRadar:",
+        color=discord.Color.blue()
+    )
+    
+    commands_info = [
+        ("👋 /hi", "Say hello to the bot and get a quick intro."),
+        ("🔄 /fetch", "Manually check for new hackathons immediately."),
+        ("🔍 /search [keyword]", "Search for hackathons by topic (e.g., `/search AI`)."),
+        ("🌐 /platform [name] [count]", "Get hackathons from a specific platform (e.g., `/platform devfolio`)."),
+        ("📅 /upcoming [days]", "See hackathons starting in the next X days (e.g., `/upcoming 14`)."),
+        ("🔔 /subscribe [theme]", "Get DM alerts for a specific theme (e.g., `/subscribe blockchain`)."),
+        ("🔕 /unsubscribe [theme]", "Stop receiving DM alerts for a theme."),
+        ("⚙️ /set_channel [channel]", "(Admin only) Set the channel for automatic notifications.")
+    ]
+
+    for cmd, desc in commands_info:
+        embed.add_field(name=cmd, value=desc, inline=False)
+
+    await interaction.response.send_message(embed=embed)
+
+
 def format_hackathon_embed(hackathon):
     """Create a Discord embed for a hackathon notification."""
 
