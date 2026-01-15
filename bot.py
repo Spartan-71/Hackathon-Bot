@@ -72,6 +72,19 @@ class MyClient(discord.Client):
         except Exception as e:
             print(f"Failed to sync commands to {guild.name}: {e}")
 
+    async def on_guild_remove(self, guild):
+        """Cleanup data when removed from a guild."""
+        print(f"Removed from guild: {guild.name} ({guild.id})")
+        try:
+            db = SessionLocal()
+            # Delete guild config
+            db.query(GuildConfig).filter(GuildConfig.guild_id == str(guild.id)).delete()
+            db.commit()
+            db.close()
+            logging.info(f"Deleted data for guild {guild.id} after removal")
+        except Exception as e:
+            logging.error(f"Failed to cleanup data for guild {guild.id}: {e}")
+
     async def on_interaction(self, interaction: discord.Interaction):
         if interaction.type == discord.InteractionType.component:
             if interaction.data.get("custom_id") == "set_reminder":
@@ -199,6 +212,7 @@ async def search(interaction: discord.Interaction, keyword: str):
     
     db = SessionLocal()
     try:
+        logging.info(f"Search query: {keyword} by user {interaction.user.id}")
         results = search_hackathons(db, keyword)
     finally:
         db.close()
@@ -231,6 +245,7 @@ async def platform(interaction: discord.Interaction, name: str, count: int = 3):
     
     db = SessionLocal()
     try:
+        logging.info(f"Platform query: {name} by user {interaction.user.id}")
         results = get_hackathons_by_platform(db, name, count)
     finally:
         db.close()
