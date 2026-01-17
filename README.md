@@ -1,4 +1,12 @@
 <img width="1095" height="387" alt="image" src="https://github.com/user-attachments/assets/7fcf725a-31ab-401d-8d00-b359e073c98d" />
+<div align="center">
+
+![GitHub stars](https://img.shields.io/github/stars/Spartan-71/Discord-Hackathon-Bot)
+![License](https://img.shields.io/github/license/Spartan-71/Discord-Hackathon-Bot)
+![Discord Bots](https://top.gg/api/widget/servers/1457695413946814540.svg)
+
+</div>
+
 
 ## What is it?
 
