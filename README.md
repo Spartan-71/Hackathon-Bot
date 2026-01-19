@@ -1,6 +1,16 @@
-# HackRadar
+<img width="1095" height="387" alt="image" src="https://github.com/user-attachments/assets/7fcf725a-31ab-401d-8d00-b359e073c98d" />
+<div align="center">
 
-HackRadar is a **Discord Bot** that tracks upcoming hackathons from major platforms like MLH, Devpost, Devfolio, DoraHacks, and Unstop. It fetches data periodically and notifies your Discord server about new events.
+![GitHub stars](https://img.shields.io/github/stars/Spartan-71/Discord-Hackathon-Bot)
+![License](https://img.shields.io/github/license/Spartan-71/Discord-Hackathon-Bot)
+![Discord Bots](https://top.gg/api/widget/servers/1457695413946814540.svg)
+
+</div>
+
+
+## What is it?
+
+HackRadar is a **Discord Bot** that tracks upcoming hackathons from major platforms like **MLH, Devpost, Devfolio, DoraHacks, and Unstop**. It fetches data periodically and notifies your Discord server about new events.
 
 ## 🚀 Features
 
