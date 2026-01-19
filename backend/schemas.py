@@ -22,7 +22,7 @@ class Hackathon(BaseModel):
     @classmethod
     def split_tags(cls, v):
         if isinstance(v, str):
-            return [tag.strip() for tag in v.split(",") if tag.strip()]
+            return [tag.strip().lower() for tag in v.split(",") if tag.strip()]
         return v
 
     model_config = {
