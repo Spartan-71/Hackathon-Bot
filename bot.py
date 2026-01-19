@@ -63,7 +63,7 @@ class MyClient(discord.Client):
             print(f"Error syncing commands: {e}")
 
     async def on_guild_join(self, guild):
-        """Sync commands when joining a new guild."""
+        """Sync commands when joining a new guild and send welcome message."""
         print(f"Joined new guild: {guild.name} ({guild.id})")
         try:
             self.tree.copy_global_to(guild=guild)
@@ -150,14 +150,20 @@ async def fetch(interaction: discord.Interaction):
         
         # Send notifications to the current channel
         channel = interaction.channel
-        if channel and channel.permissions_for(interaction.guild.me).send_messages:
-            await send_hackathon_notifications(client, new_hackathons, target_channel=channel)
-            logging.info(f"Manual fetch completed: Sent {len(new_hackathons)} notifications")
+        if channel:
+            # Check permissions first
+            permissions = channel.permissions_for(interaction.guild.me)
+            if permissions.send_messages and permissions.embed_links:
+                await send_hackathon_notifications(client, new_hackathons, target_channel=channel)
+                logging.info(f"Manual fetch completed: Sent {len(new_hackathons)} notifications")
+            else:
+                await interaction.followup.send(
+                    "⚠️ Fetch completed, but I don't have permission to send messages or embeds in this channel. Please check my permissions."
+                )
+                logging.warning(f"Manual fetch completed but no permission to send in channel {channel.id}")
         else:
-            await interaction.followup.send(
-                "⚠️ Fetch completed but I don't have permission to send messages in this channel."
-            )
-            logging.warning(f"Manual fetch completed but no permission to send in channel {channel.id}")
+             # Should not happen in guild context usually
+             logging.warning("Manual fetch completed but channel is None")
             
     except Exception as e:
         error_msg = f"❌ Error during fetch: {str(e)}"
@@ -228,12 +234,16 @@ async def search(interaction: discord.Interaction, keyword: str):
     
     # Use the shared notification function
     if interaction.channel:
-        await send_hackathon_notifications(client, results, target_channel=interaction.channel)
+        permissions = interaction.channel.permissions_for(interaction.guild.me)
+        if permissions.send_messages and permissions.embed_links:
+            await send_hackathon_notifications(client, results, target_channel=interaction.channel)
+        else:
+            await interaction.followup.send(
+                "⚠️ I found hackathons, but I don't have permission to send messages or embeds in this channel.",
+                ephemeral=True
+            )
     else:
-        # Fallback if channel is not available (e.g. ephemeral context where channel is not accessible)
-        # But usually interaction.channel is available.
-        # If not, we can iterate and send as followup, but user asked to use the function.
-        # Let's try to get channel from interaction.
+        # Fallback if channel is not available
         pass
 
 
@@ -261,7 +271,14 @@ async def platform(interaction: discord.Interaction, name: str, count: int = 3):
     
     # Use the shared notification function
     if interaction.channel:
-        await send_hackathon_notifications(client, results, target_channel=interaction.channel)
+        permissions = interaction.channel.permissions_for(interaction.guild.me)
+        if permissions.send_messages and permissions.embed_links:
+            await send_hackathon_notifications(client, results, target_channel=interaction.channel)
+        else:
+            await interaction.followup.send(
+                "⚠️ I found hackathons, but I don't have permission to send messages or embeds in this channel.",
+                ephemeral=True
+            )
     else:
         pass
 
@@ -289,7 +306,14 @@ async def upcoming(interaction: discord.Interaction, days: int = 7):
     
     # Use the shared notification function
     if interaction.channel:
-        await send_hackathon_notifications(client, results, target_channel=interaction.channel)
+        permissions = interaction.channel.permissions_for(interaction.guild.me)
+        if permissions.send_messages and permissions.embed_links:
+            await send_hackathon_notifications(client, results, target_channel=interaction.channel)
+        else:
+            await interaction.followup.send(
+                "⚠️ I found hackathons, but I don't have permission to send messages or embeds in this channel.",
+                ephemeral=True
+            )
     else:
         pass
 
@@ -418,11 +442,19 @@ async def send_hackathon_notifications(bot: MyClient, new_hackathons, target_cha
     
     if target_channel:
         # Send to specific channel (for manual fetch command)
+        # Check permissions again to be safe
+        permissions = target_channel.permissions_for(target_channel.guild.me)
+        if not (permissions.send_messages and permissions.embed_links):
+            logging.warning(f"Missing permissions in target channel {target_channel.id}. Skipping notifications.")
+            return
+
         for hackathon in new_hackathons:
             try:
                 msg, embed, view = format_hackathon_embed(hackathon)
                 await target_channel.send(msg, embed=embed, view=view)
                 logging.info(f"Sent notification for hackathon '{hackathon.title}' to channel {target_channel.id}")
+            except discord.Forbidden:
+                logging.error(f"403 Forbidden when sending to channel {target_channel.id}. Check permissions.")
             except Exception as e:
                 logging.error(f"Failed to send hackathon notification to channel {target_channel.id}: {e}")
     else:
@@ -439,24 +471,12 @@ async def send_hackathon_notifications(bot: MyClient, new_hackathons, target_cha
                     channel = guild.get_channel(int(config.channel_id))
                     if channel and not channel.permissions_for(guild.me).send_messages:
                         logging.warning(f"Configured channel {channel.id} in guild {guild.id} is not writable")
-                        channel = None # Fallback to auto-detection
+                        channel = None
             except Exception as e:
                 logging.error(f"Error fetching guild config for {guild.id}: {e}")
 
-            # 2. Fallback: Prefer the system channel if available
             if channel is None:
-                if guild.system_channel and guild.system_channel.permissions_for(guild.me).send_messages:
-                    channel = guild.system_channel
-            
-            # 3. Fallback: first text channel where the bot can send messages
-            if channel is None:
-                for ch in guild.text_channels:
-                    if ch.permissions_for(guild.me).send_messages:
-                        channel = ch
-                        break
-
-            if channel is None:
-                logging.warning(f"No suitable channel found in guild {guild.id}")
+                logging.warning(f"No configured notification channel found for guild {guild.id}. Skipping.")
                 continue
 
             # Send notification for each new hackathon
