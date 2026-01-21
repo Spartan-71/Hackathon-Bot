@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from sqlalchemy.exc import SQLAlchemyError
-from backend.models import HackathonDB, UserSubscription
+from backend.models import HackathonDB, UserSubscription, GuildConfig
 from backend.schemas import Hackathon
 import logging
 
@@ -178,3 +178,40 @@ def get_all_subscriptions(db: Session):
     except SQLAlchemyError as e:
         logging.error(f"Database error in get_all_subscriptions: {e}")
         return []
+
+def get_guild_config(db: Session, guild_id: str):
+    """
+    Get guild configuration.
+    """
+    try:
+        return db.query(GuildConfig).filter(GuildConfig.guild_id == guild_id).first()
+    except SQLAlchemyError as e:
+        logging.error(f"Database error in get_guild_config: {e}")
+        return None
+
+def update_guild_preferences(db: Session, guild_id: str, channel_id: str = None, platforms: list = None, themes: list = None):
+    """
+    Update guild preferences.
+    """
+    try:
+        config = db.query(GuildConfig).filter(GuildConfig.guild_id == guild_id).first()
+        if not config:
+            config = GuildConfig(guild_id=guild_id)
+            db.add(config)
+        
+        if channel_id:
+            config.channel_id = channel_id
+        
+        if platforms is not None:
+            config.subscribed_platforms = ",".join(platforms) if platforms else "all"
+            
+        if themes is not None:
+            config.subscribed_themes = ",".join(themes) if themes else "all"
+            
+        db.commit()
+        db.refresh(config)
+        return config
+    except SQLAlchemyError as e:
+        db.rollback()
+        logging.error(f"Database error in update_guild_preferences: {e}")
+        raise

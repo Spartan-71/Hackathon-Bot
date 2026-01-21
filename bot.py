@@ -14,7 +14,7 @@ from fetch_and_store import run as fetch_and_store_hackathons
 import backend.models
 from backend.models import GuildConfig, HackathonDB
 from backend.db import SessionLocal
-from backend.crud import search_hackathons, get_hackathons_by_platform, get_upcoming_hackathons, subscribe_user, get_all_subscriptions, unsubscribe_user
+from backend.crud import search_hackathons, get_hackathons_by_platform, get_upcoming_hackathons, subscribe_user, get_all_subscriptions, unsubscribe_user,update_guild_preferences, get_guild_config
 
 load_dotenv()
 
@@ -72,6 +72,52 @@ class MyClient(discord.Client):
         except Exception as e:
             print(f"Failed to sync commands to {guild.name}: {e}")
 
+        # Send welcome message
+        try:
+            target_channel = guild.system_channel
+            if not target_channel:
+                # Fallback to first text channel if system channel is not available
+                target_channel = next((ch for ch in guild.text_channels if ch.permissions_for(guild.me).send_messages), None)
+
+            if target_channel and target_channel.permissions_for(guild.me).send_messages:
+                embed = discord.Embed(
+                    title="🎉 Welcome to HackRadar!",
+                    description=(
+                        "Thanks for adding me! I'll help your community stay updated on the latest hackathons.\n\n"
+                        "**What I can do:**\n"
+                        "- Automatic notifications from Devfolio, Devpost, Unstop & more\n"
+                        "- Filter by themes (AI, Blockchain, Web3, etc.)\n"
+                        "- Track upcoming deadlines and events\n"
+                        "- Search hackathons on-demand\n\n"
+                    ),
+                    color=discord.Color.green()
+                )
+                 
+                # Add example commands
+                embed.add_field(
+                    name="🔍 Try These Commands",
+                    value=(
+                        "`/upcoming 7` - Hackathons starting this week\n"
+                        "`/search AI` - Find AI-related hackathons\n"
+                        "`/help` - See all available commands"
+                    ),
+                    inline=False
+                )
+                
+                if self.user:
+                    embed.set_thumbnail(url=self.user.display_avatar.url)
+                
+                # Create setup button
+                view = WelcomeView()
+                
+                await target_channel.send(
+                    embed=embed,
+                    view=view
+                )
+                logging.info(f"✅ Welcome message sent in {guild.name} (#{target_channel.name})")
+        except Exception as e:
+            logging.error(f"Failed to send welcome message in {guild.name}: {e}")
+
     async def on_guild_remove(self, guild):
         """Cleanup data when removed from a guild."""
         print(f"Removed from guild: {guild.name} ({guild.id})")
@@ -91,119 +137,158 @@ class MyClient(discord.Client):
                 await interaction.response.send_message("🔔 Reminder set! (This feature is coming soon)", ephemeral=True)
 
 
+class WelcomeView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="⚙️ Quick Setup", style=discord.ButtonStyle.primary, custom_id="welcome_setup")
+    async def setup_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Check if user has administrator permissions
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message(
+                "❌ You need Administrator permissions to use this command.\n"
+                "💡 Ask a server admin to run `/setup` or click this button.",
+                ephemeral=True
+            )
+            return
+        
+        # Execute the setup command logic directly
+        embed = discord.Embed(
+            title="⚙️ HackRadar Setup",
+            description="Please select your preferences below:\n\n"
+                        "1. **Platforms**: Choose which platforms to track.\n"
+                        "2. **Themes**: Choose which themes to track.\n"
+                        "3. **Channel**: Select where to post notifications.\n\n"
+                        "Click **Save Preferences** when done.",
+            color=discord.Color.blue()
+        )
+        view = SetupView(str(interaction.guild_id))
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+
+class SetupView(discord.ui.View):
+    def __init__(self, guild_id: str):
+        super().__init__()
+        self.guild_id = guild_id
+        self.platforms = []
+        self.themes = []
+        self.channel = None
+
+    @discord.ui.select(
+        placeholder="Select Platforms [Default: All]",
+        min_values=0,
+        max_values=7,
+        options=[
+            discord.SelectOption(label="Devfolio", value="devfolio"),
+            discord.SelectOption(label="Devpost", value="devpost"),
+            discord.SelectOption(label="Unstop", value="unstop"),
+            discord.SelectOption(label="DoraHacks", value="dorahacks"),
+            discord.SelectOption(label="Hack2Skill",value="hack2skill"),
+            discord.SelectOption(label="Kaggle",value="kaggle"),
+            discord.SelectOption(label="MLH", value="mlh"),
+        ]
+    )
+    async def select_platforms(self, interaction: discord.Interaction, select: discord.ui.Select):
+        self.platforms = select.values
+        await interaction.response.defer()
+
+    @discord.ui.select(
+        placeholder="Select Themes [Default: All]",
+        min_values=0,
+        max_values=8,
+        options=[
+            discord.SelectOption(label="AI/ML", value="ai"),
+            discord.SelectOption(label="Blockchain/Web3", value="blockchain"),
+            discord.SelectOption(label="Web Development", value="web"),
+            discord.SelectOption(label="Mobile App", value="mobile"),
+            discord.SelectOption(label="Data Science", value="data"),
+            discord.SelectOption(label="IoT", value="iot"),
+            discord.SelectOption(label="Cloud", value="cloud"),
+            discord.SelectOption(label="Cybersecurity", value="security"),
+        ]
+    )
+    async def select_themes(self, interaction: discord.Interaction, select: discord.ui.Select):
+        self.themes = select.values
+        await interaction.response.defer()
+
+    @discord.ui.select(
+        cls=discord.ui.ChannelSelect,
+        channel_types=[discord.ChannelType.text],
+        placeholder="Select Notification Channel"
+    )
+    async def select_channel(self, interaction: discord.Interaction, select: discord.ui.ChannelSelect):
+        self.channel = select.values[0]
+        await interaction.response.defer()
+
+    @discord.ui.button(label="Save Preferences", style=discord.ButtonStyle.green)
+    async def save_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.channel:
+            await interaction.response.send_message("❌ Please select a channel first!", ephemeral=True)
+            return
+
+        db = SessionLocal()
+        try:
+            update_guild_preferences(
+                db, 
+                self.guild_id, 
+                str(self.channel.id), 
+                self.platforms, 
+                self.themes
+            )
+            # Create a view with GitHub star button
+            github_view = discord.ui.View()
+            github_view.add_item(discord.ui.Button(
+                label="⭐ Star on GitHub",
+                url="https://github.com/Spartan-71/Discord-Hackathon-Bot",
+                style=discord.ButtonStyle.link
+            ))
+            
+            # Create success embed
+            success_embed = discord.Embed(
+                title="✅ Setup Complete!",
+                description=(
+                    "Your preferences have been saved successfully!\n\n"
+                    f"**Notification Channel:** {self.channel.mention}\n"
+                    f"**Platforms:** {', '.join(self.platforms) if self.platforms else 'All (Default)'}\n"
+                    f"**Themes:** {', '.join(self.themes) if self.themes else 'All (Default)'}\n\n"
+                    "🎉 You'll start receiving hackathon notifications soon.\n"
+                ),
+                color=discord.Color.green()
+            )
+                        
+            await interaction.response.send_message(
+                embed=success_embed,
+                view=github_view,
+                ephemeral=True
+            )
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Error saving preferences: {str(e)}", ephemeral=True)
+        finally:
+            db.close()
+
 client = MyClient(intents=intents)
 
 
-@client.tree.command(name="hi", description="Say hi")
-async def hi(interaction: discord.Interaction):
 
-
-    """Say hi and introduce the bot."""
-    embed = discord.Embed(
-        title="👋 Hello! I'm HackRadar 🚀",
-        description="I'm your personal AI assistant for tracking hackathons! I monitor platforms like **Unstop**, **Devpost**, **Devfolio** and many more to bring you the latest opportunities.",
-        color=discord.Color.green()
-    )
-    
-    embed.add_field(
-        name="✨ Key Commands",
-        value=(
-            "• **/help**: View the full command guide 📚\n"
-            "• **/fetch**: Check for new hackathons instantly 🔄\n"
-            "• **/search**: Find hackathons by topic 🔍\n"
-            "• **/subscribe**: Get alerts for your favorite themes 🔔"
-        ),
-        inline=False
-    )
-    
-    embed.add_field(
-        name="💡 Tip",
-        value="I also run in the background to keep you updated automatically. Happy Hacking! 💻",
-        inline=False
-    )
-
-    await interaction.response.send_message(embed=embed)
-
-
-@client.tree.command(name="fetch", description=
-"Manually fetch hackathons and send notifications for newly added ones")
-async def fetch(interaction: discord.Interaction):
-    """Manually trigger hackathon fetching and send notifications."""
-    # Defer the response since fetching might take some time
-    await interaction.response.defer(thinking=True)
-    
-    try:
-        logging.info(f"Manual fetch triggered by {interaction.user} in guild {interaction.guild_id}")
-        
-        # Run the fetch
-        new_hackathons = fetch_and_store_hackathons()
-        
-        if not new_hackathons:
-            await interaction.followup.send("✅ Fetch completed! No new hackathons found.")
-            logging.info("Manual fetch completed: No new hackathons")
-            return
-        
-        # Send summary message
-        await interaction.followup.send(
-            f"✅ Fetch completed! Found **{len(new_hackathons)}** new hackathon(s). Sending notifications..."
-        )
-        
-        # Send notifications to the current channel
-        channel = interaction.channel
-        if channel:
-            # Check permissions first
-            permissions = channel.permissions_for(interaction.guild.me)
-            if permissions.send_messages and permissions.embed_links:
-                await send_hackathon_notifications(client, new_hackathons, target_channel=channel)
-                logging.info(f"Manual fetch completed: Sent {len(new_hackathons)} notifications")
-            else:
-                await interaction.followup.send(
-                    "⚠️ Fetch completed, but I don't have permission to send messages or embeds in this channel. Please check my permissions."
-                )
-                logging.warning(f"Manual fetch completed but no permission to send in channel {channel.id}")
-        else:
-             # Should not happen in guild context usually
-             logging.warning("Manual fetch completed but channel is None")
-            
-    except Exception as e:
-        error_msg = f"❌ Error during fetch: {str(e)}"
-        await interaction.followup.send(error_msg)
-        logging.error(f"Error in manual fetch command: {e}")
-
-
-@client.tree.command(name="set_channel", description="Set the channel for hackathon notifications")
-@app_commands.describe(channel="The channel to send notifications to")
+@client.tree.command(name="setup", description="Configure bot preferences for this server")
 @app_commands.checks.has_permissions(administrator=True)
-async def set_channel(interaction: discord.Interaction, channel: discord.TextChannel):
-    """Set the preferred channel for hackathon notifications."""
-    await interaction.response.defer(thinking=True)
-    
-    try:
-        db = SessionLocal()
-        guild_id = str(interaction.guild_id)
-        channel_id = str(channel.id)
-        
-        # Check if config exists
-        config = db.query(GuildConfig).filter(GuildConfig.guild_id == guild_id).first()
-        
-        if config:
-            config.channel_id = channel_id
-        else:
-            config = GuildConfig(guild_id=guild_id, channel_id=channel_id)
-            db.add(config)
-            
-        db.commit()
-        db.close()
-        
-        await interaction.followup.send(f"✅ Notifications will now be sent to {channel.mention}")
-        logging.info(f"Set notification channel for guild {guild_id} to {channel_id}")
-        
-    except Exception as e:
-        await interaction.followup.send(f"❌ Error setting channel: {str(e)}")
-        logging.error(f"Error in set_channel command: {e}")
+async def setup(interaction: discord.Interaction):
+    """Configure bot preferences."""
+    embed = discord.Embed(
+        title="⚙️ HackRadar Setup",
+        description="Please select your preferences below:\n\n"
+                    "1. **Platforms**: Choose which platforms to track.\n"
+                    "2. **Themes**: Choose which themes to track.\n"
+                    "3. **Channel**: Select where to post notifications.\n\n"
+                    "💡 *Leave empty to receive all notifications.*\n\n"
+                    "Click **Save Preferences** when done.",
+        color=discord.Color.blue()
+    )
+    view = SetupView(str(interaction.guild_id))
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-@set_channel.error
-async def set_channel_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+@setup.error
+async def setup_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.MissingPermissions):
         await interaction.response.send_message("❌ You need Administrator permissions to use this command.", ephemeral=True)
     else:
@@ -463,6 +548,8 @@ async def send_hackathon_notifications(bot: MyClient, new_hackathons, target_cha
         
         for guild in bot.guilds:
             channel = None
+            platforms = ["all"]
+            themes = ["all"]
             
             # 1. Check for configured channel in DB
             try:
@@ -472,6 +559,11 @@ async def send_hackathon_notifications(bot: MyClient, new_hackathons, target_cha
                     if channel and not channel.permissions_for(guild.me).send_messages:
                         logging.warning(f"Configured channel {channel.id} in guild {guild.id} is not writable")
                         channel = None
+                    
+                    if config.subscribed_platforms:
+                        platforms = config.subscribed_platforms.split(",")
+                    if config.subscribed_themes:
+                        themes = config.subscribed_themes.split(",")
             except Exception as e:
                 logging.error(f"Error fetching guild config for {guild.id}: {e}")
 
@@ -481,6 +573,29 @@ async def send_hackathon_notifications(bot: MyClient, new_hackathons, target_cha
 
             # Send notification for each new hackathon
             for hackathon in new_hackathons:
+                # Filter by platform
+                if "all" not in platforms:
+                    if not any(p.lower() in hackathon.source.lower() for p in platforms):
+                        continue
+                
+                # Filter by theme
+                if "all" not in themes:
+                    hack_tags = [t.lower() for t in hackathon.tags] if hackathon.tags else []
+                    # Check if any subscribed theme matches any hackathon tag
+                    # Using simple substring match
+                    match = False
+                    for theme in themes:
+                        theme_lower = theme.lower()
+                        for tag in hack_tags:
+                            if theme_lower in tag:
+                                match = True
+                                break
+                        if match:
+                            break
+                    
+                    if not match:
+                        continue
+
                 try:
                     msg, embed, view = format_hackathon_embed(hackathon)
                     await channel.send(msg, embed=embed, view=view)
