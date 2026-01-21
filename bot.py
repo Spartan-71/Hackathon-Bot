@@ -14,7 +14,7 @@ from fetch_and_store import run as fetch_and_store_hackathons
 import backend.models
 from backend.models import GuildConfig, HackathonDB
 from backend.db import SessionLocal
-from backend.crud import search_hackathons, get_hackathons_by_platform, get_upcoming_hackathons, subscribe_user, get_all_subscriptions, unsubscribe_user, update_guild_preferences, get_guild_config
+from backend.crud import search_hackathons, get_hackathons_by_platform, get_upcoming_hackathons, subscribe_user, get_all_subscriptions, unsubscribe_user, update_guild_preferences, get_guild_config, pause_notifications, resume_notifications
 
 load_dotenv()
 
@@ -443,6 +443,88 @@ async def unsubscribe(interaction: discord.Interaction, theme: str):
         db.close()
 
 
+@client.tree.command(name="pause", description="Pause hackathon notifications.")
+@app_commands.checks.has_permissions(administrator=True)
+async def pause(interaction: discord.Interaction):
+    """Pause notifications for this server."""
+    await interaction.response.defer(ephemeral=True)
+    
+    db = SessionLocal()
+    try:
+        success = pause_notifications(db, str(interaction.guild_id))
+        if success:
+            embed = discord.Embed(
+                title="⏸️ Notifications Paused",
+                description=(
+                    "Hackathon notifications have been paused for this server.\n\n"
+                    "Use `/resume` to start receiving notifications again."
+                ),
+                color=discord.Color.orange()
+            )
+            await interaction.followup.send(embed=embed)
+        else:
+            embed = discord.Embed(
+                title="❌ Setup Required",
+                description="Please run `/setup` first to configure the bot before using this command.",
+                color=discord.Color.red()
+            )
+            await interaction.followup.send(embed=embed)
+    except Exception as e:
+        await interaction.followup.send(f"❌ Error pausing notifications: {str(e)}")
+        logging.error(f"Error in pause command: {e}")
+    finally:
+        db.close()
+
+
+@pause.error
+async def pause_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message("❌ You need Administrator permissions to use this command.", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"❌ An error occurred: {str(error)}", ephemeral=True)
+
+
+@client.tree.command(name="resume", description="Resume hackathon notifications.")
+@app_commands.checks.has_permissions(administrator=True)
+async def resume(interaction: discord.Interaction):
+    """Resume notifications for this server."""
+    await interaction.response.defer(ephemeral=True)
+    
+    db = SessionLocal()
+    try:
+        success = resume_notifications(db, str(interaction.guild_id))
+        if success:
+            embed = discord.Embed(
+                title="▶️ Notifications Resumed",
+                description=(
+                    "Hackathon notifications have been resumed for this server.\n\n"
+                    "You'll start receiving updates again."
+                ),
+                color=discord.Color.green()
+            )
+            await interaction.followup.send(embed=embed)
+        else:
+            embed = discord.Embed(
+                title="❌ Setup Required",
+                description="Please run `/setup` first to configure the bot before using this command.",
+                color=discord.Color.red()
+            )
+            await interaction.followup.send(embed=embed)
+    except Exception as e:
+        await interaction.followup.send(f"❌ Error resuming notifications: {str(e)}")
+        logging.error(f"Error in resume command: {e}")
+    finally:
+        db.close()
+
+
+@resume.error
+async def resume_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message("❌ You need Administrator permissions to use this command.", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"❌ An error occurred: {str(error)}", ephemeral=True)
+
+
 @client.tree.command(name="help", description="View all available commands")
 async def help(interaction: discord.Interaction):
     """Display all bot commands."""
@@ -637,6 +719,11 @@ async def send_hackathon_notifications(bot: MyClient, new_hackathons, target_cha
             try:
                 config = db.query(GuildConfig).filter(GuildConfig.guild_id == str(guild.id)).first()
                 if config:
+                    # Check if notifications are paused
+                    if config.notifications_paused == "true":
+                        logging.info(f"Notifications are paused for guild {guild.id}. Skipping.")
+                        continue
+                    
                     channel = guild.get_channel(int(config.channel_id))
                     if channel and not channel.permissions_for(guild.me).send_messages:
                         logging.warning(f"Configured channel {channel.id} in guild {guild.id} is not writable")

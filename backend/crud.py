@@ -215,3 +215,39 @@ def update_guild_preferences(db: Session, guild_id: str, channel_id: str = None,
         db.rollback()
         logging.error(f"Database error in update_guild_preferences: {e}")
         raise
+
+def pause_notifications(db: Session, guild_id: str):
+    """
+    Pause notifications for a guild.
+    Returns True if successful, False if guild config doesn't exist.
+    """
+    try:
+        config = db.query(GuildConfig).filter(GuildConfig.guild_id == guild_id).first()
+        if not config:
+            return False
+        
+        config.notifications_paused = "true"
+        db.commit()
+        return True
+    except SQLAlchemyError as e:
+        db.rollback()
+        logging.error(f"Database error in pause_notifications: {e}")
+        raise
+
+def resume_notifications(db: Session, guild_id: str):
+    """
+    Resume notifications for a guild.
+    Returns True if successful, False if guild config doesn't exist.
+    """
+    try:
+        config = db.query(GuildConfig).filter(GuildConfig.guild_id == guild_id).first()
+        if not config:
+            return False
+        
+        config.notifications_paused = "false"
+        db.commit()
+        return True
+    except SQLAlchemyError as e:
+        db.rollback()
+        logging.error(f"Database error in resume_notifications: {e}")
+        raise
