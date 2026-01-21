@@ -14,7 +14,7 @@ from fetch_and_store import run as fetch_and_store_hackathons
 import backend.models
 from backend.models import GuildConfig, HackathonDB
 from backend.db import SessionLocal
-from backend.crud import search_hackathons, get_hackathons_by_platform, get_upcoming_hackathons, subscribe_user, get_all_subscriptions, unsubscribe_user,update_guild_preferences, get_guild_config
+from backend.crud import search_hackathons, get_hackathons_by_platform, get_upcoming_hackathons, subscribe_user, get_all_subscriptions, unsubscribe_user, update_guild_preferences, get_guild_config
 
 load_dotenv()
 
@@ -443,30 +443,73 @@ async def unsubscribe(interaction: discord.Interaction, theme: str):
         db.close()
 
 
-@client.tree.command(name="help", description="Show the command guide and usage examples")
+@client.tree.command(name="help", description="View all available commands")
 async def help(interaction: discord.Interaction):
-    """Show the command guide."""
+    """Display all bot commands."""
+
     embed = discord.Embed(
-        title="🛠️ HackRadar Command Guide",
-        description="Here are the commands you can use to interact with HackRadar:",
+        title="📖 HackRadar Commands",
+        description="Here's everything you can do with HackRadar:",
         color=discord.Color.blue()
     )
     
-    commands_info = [
-        ("👋 /hi", "Say hello to the bot and get a quick intro."),
-        ("🔄 /fetch", "Manually check for new hackathons immediately."),
-        ("🔍 /search [keyword]", "Search for hackathons by topic (e.g., `/search AI`)."),
-        ("🌐 /platform [name] [count]", "Get hackathons from a specific platform (e.g., `/platform devfolio`)."),
-        ("📅 /upcoming [days]", "See hackathons starting in the next X days (e.g., `/upcoming 14`)."),
-        ("🔔 /subscribe [theme]", "Get DM alerts for a specific theme (e.g., `/subscribe blockchain`)."),
-        ("🔕 /unsubscribe [theme]", "Stop receiving DM alerts for a theme."),
-        ("⚙️ /set_channel [channel]", "(Admin only) Set the channel for automatic notifications.")
-    ]
+    # Server Setup (Admin Only)
+    embed.add_field(
+        name="🔧 Server Setup",
+        value=(
+            "- `/setup` - Configure bot preferences\n"
+            "- `/pause` - Pause notifications\n"
+            "- `/resume` - Resume notifications\n"
+            "*Requires Manage Server permission*"
+        ),
+        inline=False
+    )
+    
+    # Search & Browse
+    embed.add_field(
+        name="🔍 Search & Browse",
+        value=(
+            "- `/search [keyword]` - Search hackathons\n"
+            "- `/upcoming [days]` - Hackathons starting soon\n"
+            "- `/platform [name]` - Filter by platform\n"
+        ),
+        inline=False
+    )
+    
+    # Personal Alerts
+    embed.add_field(
+        name="🔔 Personal Alerts",
+        value=(
+            "- `/subscribe [theme]` - Get DM alerts\n"
+            "- `/unsubscribe [theme]` - Stop DM alerts\n"
+        ),
+        inline=False
+    )
+    
+    # Info
+    embed.add_field(
+        name="ℹ️ Info & Support",
+        value=(
+            "- `/about` - About HackRadar\n"
+            "- `/help` - Show this message"
+        ),
+        inline=False
+    )
+    
+    embed.set_footer(text="💡 Tip: Run /setup first to start receiving notifications")
+    embed.set_thumbnail(url=client.user.display_avatar.url)
+    
+    # Optional: Add GitHub star button
+    view = discord.ui.View()
+    view.add_item(discord.ui.Button(
+        label="Star on GitHub",
+        style=discord.ButtonStyle.link,
+        url="https://github.com/Spartan-71/Discord-Hackathon-Bot",
+        emoji="⭐"
+    ))
+    
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-    for cmd, desc in commands_info:
-        embed.add_field(name=cmd, value=desc, inline=False)
-
-    await interaction.response.send_message(embed=embed)
 
 @client.tree.command(name="about", description="Learn about HackRadar")
 async def about(interaction: discord.Interaction):
