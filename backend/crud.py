@@ -179,6 +179,16 @@ def get_all_subscriptions(db: Session):
         logging.error(f"Database error in get_all_subscriptions: {e}")
         return []
 
+def get_user_subscriptions(db: Session, user_id: int):
+    """
+    Get all subscriptions for a specific user.
+    """
+    try:
+        return db.query(UserSubscription).filter(UserSubscription.user_id == user_id).all()
+    except SQLAlchemyError as e:
+        logging.error(f"Database error in get_user_subscriptions: {e}")
+        return []
+
 def get_guild_config(db: Session, guild_id: str):
     """
     Get guild configuration.

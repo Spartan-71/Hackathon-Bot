@@ -14,7 +14,7 @@ from fetch_and_store import run as fetch_and_store_hackathons
 import backend.models
 from backend.models import GuildConfig, HackathonDB
 from backend.db import SessionLocal
-from backend.crud import search_hackathons, get_hackathons_by_platform, get_upcoming_hackathons, subscribe_user, get_all_subscriptions, unsubscribe_user, update_guild_preferences, get_guild_config, pause_notifications, resume_notifications
+from backend.crud import search_hackathons, get_hackathons_by_platform, get_upcoming_hackathons, subscribe_user, get_all_subscriptions, get_user_subscriptions, unsubscribe_user, update_guild_preferences, get_guild_config, pause_notifications, resume_notifications
 
 load_dotenv()
 
@@ -606,6 +606,54 @@ async def unsubscribe(interaction: discord.Interaction, theme: str):
         db.close()
 
 
+@client.tree.command(name="subscriptions", description="View all your theme subscriptions")
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
+async def subscriptions(interaction: discord.Interaction):
+    """Display all user subscriptions."""
+    await interaction.response.defer(ephemeral=True)
+    
+    db = SessionLocal()
+    try:
+        user_subs = get_user_subscriptions(db, interaction.user.id)
+        
+        if not user_subs:
+            embed = discord.Embed(
+                title="📋 Your Subscriptions",
+                description="You don't have any active subscriptions yet.\n\n"
+                            "Use `/subscribe [theme]` to start receiving notifications for specific themes!",
+                color=discord.Color.blue()
+            )
+            await interaction.followup.send(embed=embed)
+            return
+        
+        # Create embed with all subscriptions
+        embed = discord.Embed(
+            title="📋 Your Subscriptions",
+            description=f"You're subscribed to **{len(user_subs)}** theme(s):",
+            color=discord.Color.green()
+        )
+        
+        # Format subscriptions as a list
+        themes_list = "\n".join([f"• **{sub.theme}**" for sub in user_subs])
+        embed.add_field(
+            name="Active Themes",
+            value=themes_list,
+            inline=False
+        )
+        
+        embed.set_footer(text="💡 Use /unsubscribe [theme] to remove a subscription")
+        
+        await interaction.followup.send(embed=embed)
+        
+    except Exception as e:
+        await interaction.followup.send(f"❌ Error fetching subscriptions: {str(e)}")
+        logging.error(f"Error in subscriptions command: {e}")
+    finally:
+        db.close()
+
+
+
 @client.tree.command(name="pause", description="Pause hackathon notifications.")
 @app_commands.checks.has_permissions(administrator=True)
 async def pause(interaction: discord.Interaction):
@@ -729,6 +777,7 @@ async def help(interaction: discord.Interaction):
         value=(
             "- `/subscribe [theme]` - Get DM alerts\n"
             "- `/unsubscribe [theme]` - Stop DM alerts\n"
+            "- `/subscriptions` - View your subscriptions\n"
         ),
         inline=False
     )
