@@ -18,6 +18,16 @@ from backend.crud import search_hackathons, get_hackathons_by_platform, get_upco
 
 load_dotenv()
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
+
+
 intents = discord.Intents.default()  # no privileged intents required for slash commands
 intents.guilds = True  # needed to see guilds and channels
 
@@ -42,35 +52,28 @@ class MyClient(discord.Client):
             print(f'  Channels: {len(guild.text_channels)}')
             print(f"Logged on as {self.user}")
         
-        # Sync commands after bot is ready - sync to each guild for instant updates
-    
+        # Sync commands globally only (supports both guild and user installs)
         try:
-            # Sync to each guild for instant updates (faster than global sync)
+            # Clear any existing guild-specific commands to avoid duplicates
             for guild in self.guilds:
                 try:
                     self.tree.clear_commands(guild=guild)
                     await self.tree.sync(guild=guild)
-                    print(f"Cleared guild commands for {guild.name}")
+                    print(f"Cleared guild-specific commands for {guild.name}")
                 except Exception as e:
-                    print(f"Failed to clear commands for {guild.name}: {e}")
+                    print(f"Failed to clear guild commands for {guild.name}: {e}")
             
-            # Also sync globally (takes up to 1 hour but ensures commands work everywhere)
- 
+            # Sync globally (this supports both guild and user installs)
             synced_global = await self.tree.sync()
-
             print(f"Synced {len(synced_global)} commands globally")
+            print("Commands are now available in both servers and DMs!")
         except Exception as e:
             print(f"Error syncing commands: {e}")
 
     async def on_guild_join(self, guild):
-        """Sync commands when joining a new guild and send welcome message."""
+        """Send welcome message when joining a new guild."""
         print(f"Joined new guild: {guild.name} ({guild.id})")
-        try:
-            self.tree.copy_global_to(guild=guild)
-            synced = await self.tree.sync(guild=guild)
-            print(f"Synced {len(synced)} commands to {guild.name}")
-        except Exception as e:
-            print(f"Failed to sync commands to {guild.name}: {e}")
+        print(f"Commands are already available globally (no guild-specific sync needed)")
 
         # Send welcome message
         try:
@@ -296,6 +299,8 @@ async def setup_error(interaction: discord.Interaction, error: app_commands.AppC
 
 
 @client.tree.command(name="search", description="Search hackathons by keywords.")
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 @app_commands.describe(keyword="Search term (e.g.,AI, Blockchain, Data Science)")
 async def search(interaction: discord.Interaction, keyword: str):
     """Search hackathons"""
@@ -317,22 +322,74 @@ async def search(interaction: discord.Interaction, keyword: str):
     
     await interaction.followup.send(f"🔍 Found **{len(results)}** hackathon(s) for **{keyword}**:")
     
-    # Use the shared notification function
-    if interaction.channel:
-        permissions = interaction.channel.permissions_for(interaction.guild.me)
-        if permissions.send_messages and permissions.embed_links:
-            await send_hackathon_notifications(client, results, target_channel=interaction.channel)
+    # Check if this is a guild context or user install (DM) context
+    if interaction.guild:
+        # Guild context - check if bot is actually in this guild
+        if not interaction.guild.me:
+            # User install: bot not in this server
+            await interaction.followup.send(
+                "⚠️ **I'm not installed in this server!**\n\n"
+                "You have two options:\n"
+                "1️⃣ **Use me in DMs**: Send me a direct message and use this command there\n"
+                "2️⃣ **Add me to this server**: Ask a server admin to invite me\n\n"
+                "💡 *Tip: All search commands work perfectly in DMs!*",
+                ephemeral=True
+            )
+            return
+        
+        # Bot is in the guild - check channel permissions
+        if interaction.channel:
+            permissions = interaction.channel.permissions_for(interaction.guild.me)
+            if permissions.send_messages and permissions.embed_links:
+                try:
+                    await send_hackathon_notifications(client, results, target_channel=interaction.channel)
+                except discord.Forbidden:
+                    # Permission error - send via followup instead
+                    await interaction.followup.send(
+                        "⚠️ **Permission Error**: I don't have permission to send messages in this channel.\n\n"
+                        "💡 **Tip**: Try using this command in a channel where I have permissions, or use it in DMs!",
+                        ephemeral=True
+                    )
+                except Exception as e:
+                    logging.error(f"Error sending hackathons to channel: {e}")
+                    await interaction.followup.send(
+                        "⚠️ An error occurred while sending the results. Please try again or use this command in DMs.",
+                        ephemeral=True
+                    )
+            else:
+                await interaction.followup.send(
+                    "⚠️ I found hackathons, but I don't have permission to send messages or embeds in this channel.\n\n"
+                    "💡 **Tip**: Ask a server admin to give me permissions, or use this command in DMs!",
+                    ephemeral=True
+                )
         else:
             await interaction.followup.send(
-                "⚠️ I found hackathons, but I don't have permission to send messages or embeds in this channel.",
+                "⚠️ Unable to determine the channel context.",
                 ephemeral=True
             )
     else:
-        # Fallback if channel is not available
-        pass
+        # User install context (DM) - send directly to the DM channel
+        logging.info(f"Sending {len(results)} search results to user {interaction.user.id} via DM")
+        for idx, hackathon in enumerate(results, 1):
+            try:
+                msg, embed, view = format_hackathon_embed(hackathon)
+                if embed:
+                    await interaction.followup.send(content=msg, embed=embed, view=view)
+                else:
+                    await interaction.followup.send(content=msg, view=view)
+                logging.info(f"Sent search result {idx}/{len(results)} for hackathon '{hackathon.title}' to user {interaction.user.id}")
+            except Exception as e:
+                logging.error(f"Failed to send hackathon '{hackathon.title}' to user {interaction.user.id}: {e}")
+                # Try sending without embed as fallback
+                try:
+                    await interaction.followup.send(f"⚠️ Error displaying hackathon: {hackathon.title}\nURL: {hackathon.url}")
+                except:
+                    pass
 
 
 @client.tree.command(name="platform", description="Get latest hackathons from a specific platform")
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 @app_commands.describe(name="Platform name (e.g., unstop, devfolio)", count="Number of results to return (default 3)")
 async def platform(interaction: discord.Interaction, name: str, count: int = 3):
     """Get hackathons from a specific platform"""
@@ -354,21 +411,73 @@ async def platform(interaction: discord.Interaction, name: str, count: int = 3):
     
     await interaction.followup.send(f"🔍 Found **{len(results)}** hackathon(s) from **{name}**:")
     
-    # Use the shared notification function
-    if interaction.channel:
-        permissions = interaction.channel.permissions_for(interaction.guild.me)
-        if permissions.send_messages and permissions.embed_links:
-            await send_hackathon_notifications(client, results, target_channel=interaction.channel)
+    # Check if this is a guild context or user install (DM) context
+    if interaction.guild:
+        # Guild context - check if bot is actually in this guild
+        if not interaction.guild.me:
+            # User install: bot not in this server
+            await interaction.followup.send(
+                "⚠️ **I'm not installed in this server!**\n\n"
+                "You have two options:\n"
+                "1️⃣ **Use me in DMs**: Send me a direct message and use this command there\n"
+                "2️⃣ **Add me to this server**: Ask a server admin to invite me\n\n"
+                "💡 *Tip: All search commands work perfectly in DMs!*",
+                ephemeral=True
+            )
+            return
+        
+        # Bot is in the guild - check channel permissions
+        if interaction.channel:
+            permissions = interaction.channel.permissions_for(interaction.guild.me)
+            if permissions.send_messages and permissions.embed_links:
+                try:
+                    await send_hackathon_notifications(client, results, target_channel=interaction.channel)
+                except discord.Forbidden:
+                    await interaction.followup.send(
+                        "⚠️ **Permission Error**: I don't have permission to send messages in this channel.\n\n"
+                        "💡 **Tip**: Try using this command in a channel where I have permissions, or use it in DMs!",
+                        ephemeral=True
+                    )
+                except Exception as e:
+                    logging.error(f"Error sending hackathons to channel: {e}")
+                    await interaction.followup.send(
+                        "⚠️ An error occurred while sending the results. Please try again or use this command in DMs.",
+                        ephemeral=True
+                    )
+            else:
+                await interaction.followup.send(
+                    "⚠️ I found hackathons, but I don't have permission to send messages or embeds in this channel.\n\n"
+                    "💡 **Tip**: Ask a server admin to give me permissions, or use this command in DMs!",
+                    ephemeral=True
+                )
         else:
             await interaction.followup.send(
-                "⚠️ I found hackathons, but I don't have permission to send messages or embeds in this channel.",
+                "⚠️ Unable to determine the channel context.",
                 ephemeral=True
             )
     else:
-        pass
+        # User install context (DM) - send directly to the DM channel
+        logging.info(f"Sending {len(results)} platform results to user {interaction.user.id} via DM")
+        for idx, hackathon in enumerate(results, 1):
+            try:
+                msg, embed, view = format_hackathon_embed(hackathon)
+                if embed:
+                    await interaction.followup.send(content=msg, embed=embed, view=view)
+                else:
+                    await interaction.followup.send(content=msg, view=view)
+                logging.info(f"Sent platform result {idx}/{len(results)} for hackathon '{hackathon.title}' to user {interaction.user.id}")
+            except Exception as e:
+                logging.error(f"Failed to send hackathon '{hackathon.title}' to user {interaction.user.id}: {e}")
+                # Try sending without embed as fallback
+                try:
+                    await interaction.followup.send(f"⚠️ Error displaying hackathon: {hackathon.title}\nURL: {hackathon.url}")
+                except:
+                    pass
 
 
 @client.tree.command(name="upcoming", description="Get hackathons starting in the next X days")
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 @app_commands.describe(days="Number of days to look ahead (default 7)")
 async def upcoming(interaction: discord.Interaction, days: int = 7):
     """Get hackathons starting in the next X days"""
@@ -389,21 +498,73 @@ async def upcoming(interaction: discord.Interaction, days: int = 7):
     
     await interaction.followup.send(f"📅 Found **{len(results)}** upcoming hackathon(s) in the next **{days}** days:")
     
-    # Use the shared notification function
-    if interaction.channel:
-        permissions = interaction.channel.permissions_for(interaction.guild.me)
-        if permissions.send_messages and permissions.embed_links:
-            await send_hackathon_notifications(client, results, target_channel=interaction.channel)
+    # Check if this is a guild context or user install (DM) context
+    if interaction.guild:
+        # Guild context - check if bot is actually in this guild
+        if not interaction.guild.me:
+            # User install: bot not in this server
+            await interaction.followup.send(
+                "⚠️ **I'm not installed in this server!**\n\n"
+                "You have two options:\n"
+                "1️⃣ **Use me in DMs**: Send me a direct message and use this command there\n"
+                "2️⃣ **Add me to this server**: Ask a server admin to invite me\n\n"
+                "💡 *Tip: All search commands work perfectly in DMs!*",
+                ephemeral=True
+            )
+            return
+        
+        # Bot is in the guild - check channel permissions
+        if interaction.channel:
+            permissions = interaction.channel.permissions_for(interaction.guild.me)
+            if permissions.send_messages and permissions.embed_links:
+                try:
+                    await send_hackathon_notifications(client, results, target_channel=interaction.channel)
+                except discord.Forbidden:
+                    await interaction.followup.send(
+                        "⚠️ **Permission Error**: I don't have permission to send messages in this channel.\n\n"
+                        "💡 **Tip**: Try using this command in a channel where I have permissions, or use it in DMs!",
+                        ephemeral=True
+                    )
+                except Exception as e:
+                    logging.error(f"Error sending hackathons to channel: {e}")
+                    await interaction.followup.send(
+                        "⚠️ An error occurred while sending the results. Please try again or use this command in DMs.",
+                        ephemeral=True
+                    )
+            else:
+                await interaction.followup.send(
+                    "⚠️ I found hackathons, but I don't have permission to send messages or embeds in this channel.\n\n"
+                    "💡 **Tip**: Ask a server admin to give me permissions, or use this command in DMs!",
+                    ephemeral=True
+                )
         else:
             await interaction.followup.send(
-                "⚠️ I found hackathons, but I don't have permission to send messages or embeds in this channel.",
+                "⚠️ Unable to determine the channel context.",
                 ephemeral=True
             )
     else:
-        pass
+        # User install context (DM) - send directly to the DM channel
+        logging.info(f"Sending {len(results)} upcoming results to user {interaction.user.id} via DM")
+        for idx, hackathon in enumerate(results, 1):
+            try:
+                msg, embed, view = format_hackathon_embed(hackathon)
+                if embed:
+                    await interaction.followup.send(content=msg, embed=embed, view=view)
+                else:
+                    await interaction.followup.send(content=msg, view=view)
+                logging.info(f"Sent upcoming result {idx}/{len(results)} for hackathon '{hackathon.title}' to user {interaction.user.id}")
+            except Exception as e:
+                logging.error(f"Failed to send hackathon '{hackathon.title}' to user {interaction.user.id}: {e}")
+                # Try sending without embed as fallback
+                try:
+                    await interaction.followup.send(f"⚠️ Error displaying hackathon: {hackathon.title}\nURL: {hackathon.url}")
+                except:
+                    pass
 
 
 @client.tree.command(name="subscribe", description="Subscribe to hackathon notifications for a specific theme")
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 @app_commands.describe(theme="The theme to subscribe to (e.g., AI, Blockchain)")
 async def subscribe(interaction: discord.Interaction, theme: str):
     """Subscribe to a theme."""
@@ -424,6 +585,8 @@ async def subscribe(interaction: discord.Interaction, theme: str):
 
 
 @client.tree.command(name="unsubscribe", description="Unsubscribe from hackathon notifications for a specific theme")
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 @app_commands.describe(theme="The theme to unsubscribe from")
 async def unsubscribe(interaction: discord.Interaction, theme: str):
     """Unsubscribe from a theme."""
@@ -526,6 +689,8 @@ async def resume_error(interaction: discord.Interaction, error: app_commands.App
 
 
 @client.tree.command(name="help", description="View all available commands")
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def help(interaction: discord.Interaction):
     """Display all bot commands."""
 
@@ -594,6 +759,8 @@ async def help(interaction: discord.Interaction):
 
 
 @client.tree.command(name="about", description="Learn about HackRadar")
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def about(interaction: discord.Interaction):
     """Show information about the bot."""
     embed = discord.Embed(
@@ -700,7 +867,10 @@ async def send_hackathon_notifications(bot: MyClient, new_hackathons, target_cha
         for hackathon in new_hackathons:
             try:
                 msg, embed, view = format_hackathon_embed(hackathon)
-                await target_channel.send(msg, embed=embed, view=view)
+                if embed:
+                    await target_channel.send(content=msg, embed=embed, view=view)
+                else:
+                    await target_channel.send(content=msg, view=view)
                 logging.info(f"Sent notification for hackathon '{hackathon.title}' to channel {target_channel.id}")
             except discord.Forbidden:
                 logging.error(f"403 Forbidden when sending to channel {target_channel.id}. Check permissions.")
@@ -767,7 +937,10 @@ async def send_hackathon_notifications(bot: MyClient, new_hackathons, target_cha
 
                 try:
                     msg, embed, view = format_hackathon_embed(hackathon)
-                    await channel.send(msg, embed=embed, view=view)
+                    if embed:
+                        await channel.send(content=msg, embed=embed, view=view)
+                    else:
+                        await channel.send(content=msg, view=view)
                     logging.info(f"Sent notification for hackathon '{hackathon.title}' to guild {guild.id}")
                 except Exception as e:
                     logging.error(f"Failed to send hackathon notification in guild {guild.id}: {e}")
@@ -827,7 +1000,11 @@ async def notify_subscribers(bot: MyClient, new_hackathons):
                 if user:
                     for hack in hacks:
                         msg, embed, view = format_hackathon_embed(hack)
-                        await user.send(f"🔔 **New Hackathon Alert!** (Matches your subscription)\n", embed=embed, view=view)
+                        alert_msg = f"🔔 **New Hackathon Alert!** (Matches your subscription)\n\n{msg}"
+                        if embed:
+                            await user.send(content=alert_msg, embed=embed, view=view)
+                        else:
+                            await user.send(content=alert_msg, view=view)
                         logging.info(f"Sent DM notification for '{hack.title}' to user {user_id}")
             except Exception as e:
                 logging.error(f"Failed to DM user {user_id}: {e}")
