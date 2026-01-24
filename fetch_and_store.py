@@ -7,7 +7,6 @@ from adapters.unstop import fetch_unstop_hackathons
 from adapters.dorahacks import fetch_dorahacks_hackathons
 from adapters.mlh import scrape_mlh_events
 from adapters.devfolio import fetch_devfolio_hackathons
-from adapters.kaggle_adapter import fetch_kaggle_competitions
 from adapters.hack2skill import fetch_hack2skill_hackathons
 
 from backend.db import SessionLocal, Base, engine
