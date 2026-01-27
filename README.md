@@ -44,6 +44,7 @@ HackRadar is a **Discord Bot** that tracks upcoming hackathons from **7 major pl
 | :--- | :--- |
 | `/subscribe` | Subscribe to DM notifications for a specific theme. Get alerted when matching hackathons are posted. |
 | `/unsubscribe` | Unsubscribe from a theme's DM notifications. |
+| `/subscriptions` | View all your active theme subscriptions. |
 
 ### ℹ️ Information Commands
 | Command | Description |
@@ -67,7 +68,6 @@ HackRadar sends visually rich notifications including:
 *   **Visuals**: Event banner image (when available)
 *   **Interactive Buttons**:
     *   `🚀 Check Details`: Direct link to the official hackathon registration page
-    *   `🔔 Set Reminder`: Personal reminder feature (Coming Soon)
 
 ## ⚡ Quick Start (Docker)
 
