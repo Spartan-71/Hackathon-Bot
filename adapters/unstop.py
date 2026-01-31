@@ -121,7 +121,7 @@ def fetch_unstop_hackathons() -> list[Hackathon]:
 
             # Extract location
             region = item.get("region", "").lower()
-            location = "Online" if region == "online" else "Everywhere"
+            location = "Everywhere"
             
             addr = item.get("address_with_country_logo")
             if addr:
@@ -131,9 +131,10 @@ def fetch_unstop_hackathons() -> list[Hackathon]:
                     if val:
                         parts.append(val)
                 
-                country = addr.get("country", {}).get("name")
+                country = addr.get("country", {})
+
                 if country:
-                    parts.append(country)
+                    parts.append(country.get("name"))
                 
                 if parts:
                     location = ", ".join(parts)
