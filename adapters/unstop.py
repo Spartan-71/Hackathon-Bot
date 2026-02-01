@@ -119,16 +119,48 @@ def fetch_unstop_hackathons() -> list[Hackathon]:
                     if len(prize_list) > 3:
                         prize_pool += "\n- ..."
 
+            # Extract location
+            region = item.get("region", "").lower()
+            location = "Everywhere"
+            
+            addr = item.get("address_with_country_logo")
+            if addr:
+                parts = []
+                for key in ["address", "city", "state"]:
+                    val = addr.get(key)
+                    if val:
+                        parts.append(val)
+                
+                country = addr.get("country", {})
+
+                if country:
+                    parts.append(country.get("name"))
+                
+                if parts:
+                    location = ", ".join(parts)
+
+            # Map status
+            reg_status = item.get("regnRequirements", {}).get("reg_status", "").upper()
+            opp_status = item.get("status", "").upper()
+            
+            status = "ongoing"
+            if reg_status == "FINISHED":
+                status = "closed"
+            elif reg_status == "YET_TO_START":
+                status = "upcoming"
+            elif opp_status == "LIVE":
+                status = "ongoing"
+
             try:
                 hackathon = Hackathon(
                     id=hashlib.sha256(str(item.get("title")).encode()).hexdigest(),
                     title=item.get("title"),
                     start_date=start_date,
                     end_date=end_date,
-                    location="Everywhere",
+                    location=location,
                     url=item.get("seo_url"),
                     mode=item.get("region"),
-                    status="ongoing",
+                    status=status,
                     source="unstop",
                     tags=tags,
                     banner_url=item.get("logoUrl2"),

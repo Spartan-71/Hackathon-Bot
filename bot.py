@@ -676,11 +676,36 @@ async def search(interaction: discord.Interaction, keyword: str):
             logging.error(f"Failed to send paginated search results: {e}")
             await interaction.followup.send(f"⚠️ Error displaying hackathons. Found {len(results)} results but couldn't display them properly.", ephemeral=True)
 
+async def platform_autocomplete(
+    interaction: discord.Interaction,
+    current: str,
+) -> list[app_commands.Choice[str]]:
+    """Autocomplete for platform names."""
+    platforms = [
+        "devfolio",
+        "devpost",
+        "unstop",
+        "mlh",
+        "dorahacks",
+        "hack2skill",
+        "kaggle",
+    ]
+    
+    # Filter platforms based on what user is typing
+    return [
+        app_commands.Choice(name=platform.title(), value=platform)
+        for platform in platforms
+        if current.lower() in platform.lower()
+    ]
 
-@client.tree.command(name="platform", description="Get latest hackathons from a specific platform")
+@client.tree.command(name="platform", description="Get upcoming hackathons from a specific platform")
 @app_commands.allowed_installs(guilds=True, users=True)
 @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
-@app_commands.describe(name="Platform name (e.g., unstop, devfolio)", count="Number of results to return (default 3)")
+@app_commands.describe(
+    name="Select a platform",
+    count="Number of results to return (default 3)"
+)
+@app_commands.autocomplete(name=platform_autocomplete)
 async def platform(interaction: discord.Interaction, name: str, count: int = 3):
     await interaction.response.defer(thinking=True)
     db = SessionLocal()
@@ -695,7 +720,7 @@ async def platform(interaction: discord.Interaction, name: str, count: int = 3):
         db.close()
     
     if not results:
-        await interaction.followup.send(f"❌ No hackathons found for platform **{name}**", ephemeral=True)
+        await interaction.followup.send(f"❌ No upcoming hackathons found for platform **{name}**", ephemeral=True)
         return
     
     if interaction.guild:
