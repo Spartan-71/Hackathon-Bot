@@ -14,21 +14,22 @@ from backend.crud import upsert_hackathon
 
 Base.metadata.create_all(bind=engine)
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
 
 def process_source(source_name, fetch_func):
     """Process a single source with its own database session. Returns list of newly added hackathons."""
     max_retries = 3
     retry_delay = 1
     new_hackathons = []
-    
+
     for attempt in range(max_retries):
         db = SessionLocal()
         try:
             logging.info(f"Started fetching from {source_name}.")
             hackathons = fetch_func()
             logging.info(f"Fetched {len(hackathons)} hackathons from {source_name}.")
-            
+
             for h in hackathons:
                 try:
                     logging.debug(f"Upserting hackathon: {h}")
@@ -43,12 +44,16 @@ def process_source(source_name, fetch_func):
                     logging.error(f"Unexpected error upserting hackathon from {source_name}: {e}")
                     db.rollback()
                     continue
-            
-            logging.info(f"Completed upserting hackathons from {source_name}. {len(new_hackathons)} new hackathons added.")
+
+            logging.info(
+                f"Completed upserting hackathons from {source_name}. {len(new_hackathons)} new hackathons added."
+            )
             break  # Success, exit retry loop
-            
+
         except (SQLAlchemyError, OperationalError) as e:
-            logging.error(f"Database error fetching from {source_name} (attempt {attempt + 1}/{max_retries}): {e}")
+            logging.error(
+                f"Database error fetching from {source_name} (attempt {attempt + 1}/{max_retries}): {e}"
+            )
             if attempt < max_retries - 1:
                 time.sleep(retry_delay)
                 retry_delay *= 2  # Exponential backoff
@@ -59,8 +64,9 @@ def process_source(source_name, fetch_func):
             break  # Don't retry for non-database errors
         finally:
             db.close()
-    
+
     return new_hackathons
+
 
 def run():
     """
@@ -75,12 +81,14 @@ def run():
         ("DoraHacks", fetch_dorahacks_hackathons),
         ("Devfolio", fetch_devfolio_hackathons),
         # ("Kaggle", fetch_kaggle_competitions)
-        ("Hack2Skill", fetch_hack2skill_hackathons)
+        ("Hack2Skill", fetch_hack2skill_hackathons),
     ]
     all_new_hackathons = []
-    
+
     with ThreadPoolExecutor(max_workers=len(sources)) as executor:
-        future_to_source = {executor.submit(process_source, name, fetch_func): name for name, fetch_func in sources}
+        future_to_source = {
+            executor.submit(process_source, name, fetch_func): name for name, fetch_func in sources
+        }
         for future in as_completed(future_to_source):
             name = future_to_source[future]
             try:
@@ -88,8 +96,10 @@ def run():
                 all_new_hackathons.extend(new_hackathons)
             except Exception as e:
                 logging.error(f"Thread for {name} failed: {e}")
-    
-    logging.info(f"Hackathon scraping run completed. {len(all_new_hackathons)} new hackathons added.")
+
+    logging.info(
+        f"Hackathon scraping run completed. {len(all_new_hackathons)} new hackathons added."
+    )
     return all_new_hackathons
 
 

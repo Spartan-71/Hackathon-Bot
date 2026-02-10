@@ -27,9 +27,15 @@ def build_hackathon(hack_id: str, *, source: str, start_offset: int, end_offset:
 
 
 def test_get_upcoming_filters_by_dates_and_sources(db_session):
-    upsert_hackathon(db_session, build_hackathon("g1", source="devpost", start_offset=1, end_offset=2))
-    upsert_hackathon(db_session, build_hackathon("g2", source="devfolio", start_offset=3, end_offset=5))
-    upsert_hackathon(db_session, build_hackathon("g3", source="kaggle", start_offset=7, end_offset=8))
+    upsert_hackathon(
+        db_session, build_hackathon("g1", source="devpost", start_offset=1, end_offset=2)
+    )
+    upsert_hackathon(
+        db_session, build_hackathon("g2", source="devfolio", start_offset=3, end_offset=5)
+    )
+    upsert_hackathon(
+        db_session, build_hackathon("g3", source="kaggle", start_offset=7, end_offset=8)
+    )
 
     today = date.today()
     results = get_upcoming(

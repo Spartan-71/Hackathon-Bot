@@ -3,11 +3,12 @@ import hashlib
 from backend.schemas import Hackathon
 from datetime import datetime
 
+
 def fetch_devfolio_hackathons():
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     }
-    
+
     hackathons = []
     page = 1
     while True:
@@ -15,14 +16,14 @@ def fetch_devfolio_hackathons():
             response = requests.get(
                 "https://api.devfolio.co/api/hackathons",
                 params={"filter": "application_open", "page": page},
-                headers=headers
+                headers=headers,
             )
             response.raise_for_status()
             data = response.json()
-            
+
             if "result" not in data or not data["result"]:
                 break
-                
+
             for item in data["result"]:
                 title = item.get("name")
                 slug = item.get("slug")
@@ -31,22 +32,22 @@ def fetch_devfolio_hackathons():
                 start_str = item.get("starts_at")
                 end_str = item.get("ends_at")
                 registation_link = f"{url}/application"
-                
+
                 start_date = None
                 end_date = None
-                
+
                 if start_str:
                     try:
                         start_date = datetime.fromisoformat(start_str.replace("Z", "+00:00")).date()
                     except ValueError:
                         pass
-                        
+
                 if end_str:
                     try:
                         end_date = datetime.fromisoformat(end_str.replace("Z", "+00:00")).date()
                     except ValueError:
                         pass
-                
+
                 # Determine status based on dates
                 status = "Open"
                 today = datetime.now().date()
@@ -56,11 +57,11 @@ def fetch_devfolio_hackathons():
                     elif today >= start_date:
                         status = "Live"
                     else:
-                        status = "Upcoming" # or Open for registration
-                
+                        status = "Upcoming"  # or Open for registration
+
                 # Since we are filtering by 'application_open', they are likely Open/Upcoming
                 # But let's stick to a simple mapping if needed, or just use the calculated one.
-                
+
                 # Fetch prizes
                 prize_pool = "See details"
                 try:
@@ -79,7 +80,7 @@ def fetch_devfolio_hackathons():
                                 elif p_desc:
                                     # If no amount, maybe use description or just name
                                     prize_list.append(f"{p_name}")
-                            
+
                             if prize_list:
                                 # Format as vertical list with bullet points
                                 prize_pool = "\n".join([f"- {p}" for p in prize_list[:3]])
@@ -103,19 +104,18 @@ def fetch_devfolio_hackathons():
                         registation_link=registation_link,
                         prize_pool=prize_pool,
                         team_size=f"{item.get('team_min', 1)}-{item.get('team_size', 4)} members",
-                        eligibility="Open to all" # Devfolio is generally open, API doesn't specify restrictions clearly in list
+                        eligibility="Open to all",  # Devfolio is generally open, API doesn't specify restrictions clearly in list
                     )
                     hackathons.append(hackathon)
 
             page += 1
-            
+
         except requests.exceptions.RequestException as e:
             print(f"Error fetching page {page}: {e}")
             break
-            
+
     return hackathons
 
 
 if __name__ == "__main__":
     fetch_devfolio_hackathons()
-

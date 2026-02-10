@@ -2,6 +2,7 @@ from pydantic import BaseModel, field_validator
 from datetime import date
 from typing import List
 
+
 class Hackathon(BaseModel):
     id: str
     title: str
@@ -25,6 +26,4 @@ class Hackathon(BaseModel):
             return [tag.strip().lower() for tag in v.split(",") if tag.strip()]
         return v
 
-    model_config = {
-        "from_attributes": True
-    }
+    model_config = {"from_attributes": True}

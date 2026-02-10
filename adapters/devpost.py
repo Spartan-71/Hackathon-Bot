@@ -6,6 +6,7 @@ from datetime import datetime
 from backend.schemas import Hackathon
 from pydantic import ValidationError
 
+
 def get_banner_from_page(url: str) -> str | None:
     if not url:
         return None
@@ -21,6 +22,7 @@ def get_banner_from_page(url: str) -> str | None:
         print(f"Error fetching banner from {url}: {e}")
     return None
 
+
 def parse_hackathon_dates(date_str: str):
     """
     Parses date strings from Devpost API like:
@@ -33,14 +35,27 @@ def parse_hackathon_dates(date_str: str):
     if not date_str or not isinstance(date_str, str):
         return None, None
     try:
-        if ' - ' in date_str:
-            start_str, end_str = date_str.split(' - ')
-            
+        if " - " in date_str:
+            start_str, end_str = date_str.split(" - ")
+
             start_str = start_str.strip()
             end_str = end_str.strip()
-            
-            month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-            
+
+            month_names = [
+                "Jan",
+                "Feb",
+                "Mar",
+                "Apr",
+                "May",
+                "Jun",
+                "Jul",
+                "Aug",
+                "Sep",
+                "Oct",
+                "Nov",
+                "Dec",
+            ]
+
             # Determine Year for Start Date
             # If start_str has a comma, it likely has the year (e.g., "Nov 25, 2025")
             if "," in start_str:
@@ -48,7 +63,7 @@ def parse_hackathon_dates(date_str: str):
             else:
                 # If no year in start, take it from end_str
                 if "," in end_str:
-                    year = end_str.split(',')[-1].strip()
+                    year = end_str.split(",")[-1].strip()
                     full_start_str = f"{start_str}, {year}"
                 else:
                     # Fallback if no year found anywhere (unlikely for Devpost)
@@ -60,7 +75,7 @@ def parse_hackathon_dates(date_str: str):
                 full_end_str = end_str
             else:
                 # If no month in end, take it from start_str
-                start_month = start_str.split(' ')[0]
+                start_month = start_str.split(" ")[0]
                 full_end_str = f"{start_month} {end_str}"
 
             start_date = datetime.strptime(full_start_str, "%b %d, %Y").date()
@@ -69,33 +84,35 @@ def parse_hackathon_dates(date_str: str):
         else:
             date = datetime.strptime(date_str, "%b %d, %Y").date()
             return date, date
-    except (ValueError, IndexError) as e:
+    except (ValueError, IndexError):
         # print(f"Error parsing date '{date_str}': {e}")
         return None, None
+
 
 def format_devpost_prizes(item):
     """Format prize info into a vertical list."""
     prizes = []
-    
+
     # Total amount
     if item.get("prize_amount"):
         total = BeautifulSoup(item.get("prize_amount", ""), "html.parser").get_text().strip()
         prizes.append(f"- Total: {total}")
-        
+
     # Counts
     counts = item.get("prizes_counts", {})
     cash = counts.get("cash", 0)
     other = counts.get("other", 0)
-    
+
     if cash:
         prizes.append(f"- {cash} Cash Prize(s)")
     if other:
         prizes.append(f"- {other} Other Prize(s)")
-        
+
     if not prizes:
         return "See details"
-        
+
     return "\n".join(prizes)
+
 
 def fetch_devpost_hackathons() -> list[Hackathon]:
     """
@@ -117,12 +134,9 @@ def fetch_devpost_hackathons() -> list[Hackathon]:
             continue
 
         for item in hackathon_data:
-
             if item.get("open_state") == "ended":
                 break
-            start_date, end_date = parse_hackathon_dates(
-                item.get("submission_period_dates")
-            )
+            start_date, end_date = parse_hackathon_dates(item.get("submission_period_dates"))
 
             mode = "Online"
             location: str
@@ -133,13 +147,12 @@ def fetch_devpost_hackathons() -> list[Hackathon]:
             else:
                 location = "Everywhere"
 
-            hackathon_url = item.get("url")
             banner_url = item.get("thumbnail_url")
             if banner_url:
                 if banner_url.startswith("//"):
                     banner_url = f"https:{banner_url}"
                 banner_url = banner_url.replace("medium_square", "original")
-            
+
             try:
                 hackathon = Hackathon(
                     id=hashlib.sha256(str(item.get("id")).encode()).hexdigest(),
@@ -155,13 +168,14 @@ def fetch_devpost_hackathons() -> list[Hackathon]:
                     banner_url=banner_url,
                     prize_pool=format_devpost_prizes(item),
                     team_size="See details",
-                    eligibility="See details"
+                    eligibility="See details",
                 )
                 hackathons.append(hackathon)
             except ValidationError as e:
                 print(f"Skipping hackathon due to validation error: {item.get('title')}")
                 print(e)
     return hackathons
+
 
 if __name__ == "__main__":
     fetch_devpost_hackathons()

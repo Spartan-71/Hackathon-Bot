@@ -4,6 +4,7 @@ from backend.schemas import Hackathon
 import hashlib
 from datetime import date
 
+
 def scrape_mlh_events() -> list[Hackathon]:
     current_year = date.today().year + 1
     url = f"https://mlh.io/seasons/{current_year}/events"
@@ -14,7 +15,9 @@ def scrape_mlh_events() -> list[Hackathon]:
     response = scraper.get(url)
 
     if response.status_code != 200:
-        print(f"Failed to fetch MLH page for season {current_year}. Status code: {response.status_code}")
+        print(
+            f"Failed to fetch MLH page for season {current_year}. Status code: {response.status_code}"
+        )
         return []
 
     soup = BeautifulSoup(response.text, "html.parser")
@@ -25,20 +28,16 @@ def scrape_mlh_events() -> list[Hackathon]:
         name = name_tag.get_text(strip=True) if name_tag else ""
 
         link_tag = event.find("a", class_="event-link")
-        link = link_tag.get('href', '') if link_tag else ""
+        link = link_tag.get("href", "") if link_tag else ""
 
         if not name or not link:
             continue
 
-        date_tag = event.find("p", class_="event-date")
-        date_str = date_tag.get_text(strip=True) if date_tag else ""
-
         start_date_tag = event.find("meta", itemprop="startDate")
-        start_date = start_date_tag['content'] if start_date_tag else ""
+        start_date = start_date_tag["content"] if start_date_tag else ""
 
         end_date_tag = event.find("meta", itemprop="endDate")
-        end_date = end_date_tag['content'] if end_date_tag else ""
-
+        end_date = end_date_tag["content"] if end_date_tag else ""
 
         location_tag = event.find("div", class_="event-location")
         city_tag = location_tag.find("span", itemprop="city") if location_tag else None
@@ -49,12 +48,12 @@ def scrape_mlh_events() -> list[Hackathon]:
 
         format_tag = event.find("div", class_="event-hybrid-notes")
         format_type = format_tag.get_text(strip=True) if format_tag else "In-Person"
-        
+
         location: str = "Everywhere"
         mode: str = "Online"
-        if format_type=="In-Person Only":
-            mode="Offline"
-            location=f"{city}, {state}"
+        if format_type == "In-Person Only":
+            mode = "Offline"
+            location = f"{city}, {state}"
 
         hackathon = Hackathon(
             id=hashlib.sha256(name.encode()).hexdigest(),
@@ -68,7 +67,7 @@ def scrape_mlh_events() -> list[Hackathon]:
             source="mlh",
             prize_pool="See details",
             team_size="See details",
-            eligibility="Student Only" # MLH is generally student focused
+            eligibility="Student Only",  # MLH is generally student focused
         )
         events.append(hackathon)
 

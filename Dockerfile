@@ -30,4 +30,3 @@ COPY . .
 
 # Default Entrypoint
 ENTRYPOINT ["python", "bot.py"]
-

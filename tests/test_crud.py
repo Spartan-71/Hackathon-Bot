@@ -61,9 +61,16 @@ def test_upsert_hackathon_create_and_update(db_session):
 
 
 def test_search_and_platform_and_upcoming_filters(db_session):
-    upsert_hackathon(db_session, build_hackathon("hack-1", source="Devpost", tags=["ai", "web"], start_offset=1))
-    upsert_hackathon(db_session, build_hackathon("hack-2", source="Devfolio", tags=["data"], start_offset=2))
-    upsert_hackathon(db_session, build_hackathon("hack-3", source="Devpost", tags=["ai"], start_offset=-2, end_offset=1))
+    upsert_hackathon(
+        db_session, build_hackathon("hack-1", source="Devpost", tags=["ai", "web"], start_offset=1)
+    )
+    upsert_hackathon(
+        db_session, build_hackathon("hack-2", source="Devfolio", tags=["data"], start_offset=2)
+    )
+    upsert_hackathon(
+        db_session,
+        build_hackathon("hack-3", source="Devpost", tags=["ai"], start_offset=-2, end_offset=1),
+    )
 
     search_results = search_hackathons(db_session, "ai", limit=5)
     assert {r.id for r in search_results} == {"hack-1", "hack-3"}

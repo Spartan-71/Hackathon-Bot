@@ -55,7 +55,7 @@ HackRadar is a **Discord Bot** that tracks upcoming hackathons from **7 major pl
 
 HackRadar sends visually rich notifications including:
 *   **Title**: Event name with a random fun emoji (🎉, 🚀, 💡, 🔥, 💻, 🏆, etc.).
-*   **Core Details**: 
+*   **Core Details**:
     *   Duration (Start Date - End Date)
     *   Location
     *   Mode (Online/In-person/Hybrid)
@@ -117,9 +117,9 @@ HackRadar sends visually rich notifications including:
     ```
 
 ## ⚙️ Environment Variables
- 
+
 Refer to [`.env.example`](.env.example) for the complete list of required environment variables.
- 
+
 1.  **Copy the example file**:
     ```bash
     cp .env.example .env
@@ -135,13 +135,13 @@ Refer to [`.env.example`](.env.example) for the complete list of required enviro
 ### Components Overview
 HackRadar is built with a modular architecture consisting of several key components:
 
-1. **Discord Bot (`bot.py`)**: 
+1. **Discord Bot (`bot.py`)**:
    - Handles all Discord interactions using discord.py
    - Implements slash commands and interactive UI components (buttons, select menus)
    - Manages background tasks for periodic hackathon fetching (every 12 hours)
    - Sends notifications to configured channels and subscriber DMs
 
-2. **Platform Adapters (`adapters/`)**: 
+2. **Platform Adapters (`adapters/`)**:
    - Each adapter is responsible for fetching data from a specific platform
    - Supported platforms:
      - **Devfolio** (`devfolio.py`): Uses GraphQL API
@@ -153,7 +153,7 @@ HackRadar is built with a modular architecture consisting of several key compone
      - **Hack2Skill** (`hack2skill.py`): REST API integration
    - Normalizes data from different sources into a unified `Hackathon` schema
 
-3. **Database Layer (`backend/`)**: 
+3. **Database Layer (`backend/`)**:
    - **Models** (`models.py`): SQLAlchemy ORM models for:
      - `HackathonDB`: Stores all hackathon data
      - `GuildConfig`: Stores server-specific preferences (channel, platforms, themes, pause state)
@@ -161,7 +161,7 @@ HackRadar is built with a modular architecture consisting of several key compone
    - **CRUD Operations** (`crud.py`): Database query functions for searching, filtering, and managing data
    - **Schemas** (`schemas.py`): Pydantic models for data validation
 
-4. **Fetch & Store Engine (`fetch_and_store.py`)**: 
+4. **Fetch & Store Engine (`fetch_and_store.py`)**:
    - Orchestrates the data fetching process across all adapters
    - Detects new hackathons by comparing against existing database records
    - Returns only newly added events to trigger notifications

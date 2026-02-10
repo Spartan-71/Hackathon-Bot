@@ -1,9 +1,11 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
 from sqlalchemy.exc import SQLAlchemyError
 from backend.models import HackathonDB, UserSubscription, GuildConfig
 from backend.schemas import Hackathon
 import logging
+from datetime import timedelta
+from datetime import date
+
 
 def upsert_hackathon(db: Session, hack: Hackathon):
     """
@@ -39,13 +41,13 @@ def upsert_hackathon(db: Session, hack: Hackathon):
                 location=hack.location,
                 url=hack.url,
                 mode=hack.mode,
-                status=hack.status, 
+                status=hack.status,
                 source=hack.source,
                 tags=",".join(hack.tags),
                 banner_url=hack.banner_url,
                 prize_pool=hack.prize_pool,
                 team_size=hack.team_size,
-                eligibility=hack.eligibility
+                eligibility=hack.eligibility,
             )
             db.add(db_obj)
             db.commit()
@@ -59,7 +61,8 @@ def upsert_hackathon(db: Session, hack: Hackathon):
         db.rollback()
         logging.error(f"Unexpected error in upsert_hackathon: {e}")
         raise
-    
+
+
 def get_upcoming(db: Session, from_date=None, to_date=None, sources=None):
     try:
         q = db.query(HackathonDB)
@@ -74,17 +77,19 @@ def get_upcoming(db: Session, from_date=None, to_date=None, sources=None):
         logging.error(f"Database error in get_upcoming: {e}")
         raise
 
+
 def search_hackathons(db: Session, keyword: str, limit: int = 3):
     try:
         # Case insensitive search using ilike
         search_term = f"%{keyword}%"
-        results = db.query(HackathonDB).filter(HackathonDB.tags.ilike(search_term)).limit(limit).all()
+        results = (
+            db.query(HackathonDB).filter(HackathonDB.tags.ilike(search_term)).limit(limit).all()
+        )
         return results
     except SQLAlchemyError as e:
         logging.error(f"Database error in search_hackathons: {e}")
         return []
 
-from datetime import date
 
 def get_hackathons_by_platform(db: Session, platform_name: str, limit: int = 3):
     """
@@ -95,17 +100,19 @@ def get_hackathons_by_platform(db: Session, platform_name: str, limit: int = 3):
         # Case insensitive search on the source column
         # Filter for hackathons starting today or in the future
         # Order by start_date ascending (soonest first)
-        results = db.query(HackathonDB)\
-            .filter(HackathonDB.source.ilike(f"%{platform_name}%"))\
-            .filter(HackathonDB.start_date >= date.today())\
-            .order_by(HackathonDB.start_date.asc())\
-            .limit(limit).all()
+        results = (
+            db.query(HackathonDB)
+            .filter(HackathonDB.source.ilike(f"%{platform_name}%"))
+            .filter(HackathonDB.start_date >= date.today())
+            .order_by(HackathonDB.start_date.asc())
+            .limit(limit)
+            .all()
+        )
         return results
     except SQLAlchemyError as e:
         logging.error(f"Database error in get_hackathons_by_platform: {e}")
         return []
 
-from datetime import timedelta
 
 def get_upcoming_hackathons(db: Session, days: int = 7):
     """
@@ -114,16 +121,19 @@ def get_upcoming_hackathons(db: Session, days: int = 7):
     try:
         today = date.today()
         end_date = today + timedelta(days=days)
-        
-        results = db.query(HackathonDB)\
-            .filter(HackathonDB.start_date >= today)\
-            .filter(HackathonDB.start_date <= end_date)\
-            .order_by(HackathonDB.start_date.asc())\
+
+        results = (
+            db.query(HackathonDB)
+            .filter(HackathonDB.start_date >= today)
+            .filter(HackathonDB.start_date <= end_date)
+            .order_by(HackathonDB.start_date.asc())
             .all()
+        )
         return results
     except SQLAlchemyError as e:
         logging.error(f"Database error in get_upcoming_hackathons: {e}")
         return []
+
 
 def subscribe_user(db: Session, user_id: int, theme: str):
     """
@@ -131,16 +141,16 @@ def subscribe_user(db: Session, user_id: int, theme: str):
     Returns (subscription_obj, is_new)
     """
     try:
-        # Normalize theme to lowercase for consistent matching? 
-        # The user didn't specify, but it's good practice. 
-        # However, tags in DB might be mixed case. 
+        # Normalize theme to lowercase for consistent matching?
+        # The user didn't specify, but it's good practice.
+        # However, tags in DB might be mixed case.
         # Let's store as provided but maybe lowercase for comparison?
         # For now, store as provided.
-        
+
         existing = db.query(UserSubscription).filter_by(user_id=user_id, theme=theme).first()
         if existing:
             return existing, False
-        
+
         sub = UserSubscription(user_id=user_id, theme=theme)
         db.add(sub)
         db.commit()
@@ -150,6 +160,7 @@ def subscribe_user(db: Session, user_id: int, theme: str):
         db.rollback()
         logging.error(f"Database error in subscribe_user: {e}")
         raise
+
 
 def unsubscribe_user(db: Session, user_id: int, theme: str):
     """
@@ -179,6 +190,7 @@ def get_all_subscriptions(db: Session):
         logging.error(f"Database error in get_all_subscriptions: {e}")
         return []
 
+
 def get_user_subscriptions(db: Session, user_id: int):
     """
     Get all subscriptions for a specific user.
@@ -188,6 +200,7 @@ def get_user_subscriptions(db: Session, user_id: int):
     except SQLAlchemyError as e:
         logging.error(f"Database error in get_user_subscriptions: {e}")
         return []
+
 
 def get_guild_config(db: Session, guild_id: str):
     """
@@ -199,7 +212,10 @@ def get_guild_config(db: Session, guild_id: str):
         logging.error(f"Database error in get_guild_config: {e}")
         return None
 
-def update_guild_preferences(db: Session, guild_id: str, channel_id: str = None, platforms: list = None, themes: list = None):
+
+def update_guild_preferences(
+    db: Session, guild_id: str, channel_id: str = None, platforms: list = None, themes: list = None
+):
     """
     Update guild preferences.
     """
@@ -208,16 +224,16 @@ def update_guild_preferences(db: Session, guild_id: str, channel_id: str = None,
         if not config:
             config = GuildConfig(guild_id=guild_id)
             db.add(config)
-        
+
         if channel_id:
             config.channel_id = channel_id
-        
+
         if platforms is not None:
             config.subscribed_platforms = ",".join(platforms) if platforms else "all"
-            
+
         if themes is not None:
             config.subscribed_themes = ",".join(themes) if themes else "all"
-            
+
         db.commit()
         db.refresh(config)
         return config
@@ -225,6 +241,7 @@ def update_guild_preferences(db: Session, guild_id: str, channel_id: str = None,
         db.rollback()
         logging.error(f"Database error in update_guild_preferences: {e}")
         raise
+
 
 def pause_notifications(db: Session, guild_id: str):
     """
@@ -235,7 +252,7 @@ def pause_notifications(db: Session, guild_id: str):
         config = db.query(GuildConfig).filter(GuildConfig.guild_id == guild_id).first()
         if not config:
             return False
-        
+
         config.notifications_paused = "true"
         db.commit()
         return True
@@ -243,6 +260,7 @@ def pause_notifications(db: Session, guild_id: str):
         db.rollback()
         logging.error(f"Database error in pause_notifications: {e}")
         raise
+
 
 def resume_notifications(db: Session, guild_id: str):
     """
@@ -253,7 +271,7 @@ def resume_notifications(db: Session, guild_id: str):
         config = db.query(GuildConfig).filter(GuildConfig.guild_id == guild_id).first()
         if not config:
             return False
-        
+
         config.notifications_paused = "false"
         db.commit()
         return True
