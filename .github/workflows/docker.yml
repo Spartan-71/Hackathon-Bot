@@ -82,8 +82,9 @@ jobs:
             set -e
             APP_DIR="${EC2_APP_DIR}"
             cd "$APP_DIR"
-            docker login -u "$DOCKERHUB_USERNAME" -p "$DOCKERHUB_TOKEN"
+            echo "$DOCKERHUB_TOKEN" | sudo docker login -u "$DOCKERHUB_USERNAME" --password-stdin
             export IMAGE_TAG="$IMAGE_TAG"
-            sudo docker-compose pull
-            sudo docker-compose up -d
+            export HACKRADAR_IMAGE="${DOCKERHUB_USERNAME}/hackradar:${IMAGE_TAG}"
+            sudo docker compose pull
+            sudo docker compose up -d --remove-orphans
             sudo docker image prune -f
