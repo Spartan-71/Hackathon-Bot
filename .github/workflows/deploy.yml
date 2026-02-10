@@ -1,0 +1,59 @@
+name: Deploy HackRadar
+
+on:
+  workflow_run:
+    workflows:
+      - Build and Push Docker Image
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Docker image tag to deploy (defaults to latest)"
+        required: false
+        default: latest
+
+jobs:
+  deploy:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - name: Resolve image tag
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "image_tag=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "image_tag=${{ github.event.inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+          EC2_APP_DIR: ${{ secrets.EC2_APP_DIR }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT }}
+          envs: DOCKERHUB_USERNAME,DOCKERHUB_TOKEN,IMAGE_TAG,EC2_APP_DIR
+          script_stop: true
+          script: |
+            set -e
+            APP_DIR="${EC2_APP_DIR}"
+            cd "$APP_DIR"
+            echo "$DOCKERHUB_TOKEN" | sudo docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+            export IMAGE_TAG="$IMAGE_TAG"
+            export HACKRADAR_IMAGE="${DOCKERHUB_USERNAME}/hackradar:${IMAGE_TAG}"
+            sudo docker compose pull
+            sudo docker compose up -d --remove-orphans
+            sudo docker image prune -f
