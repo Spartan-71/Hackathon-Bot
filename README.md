@@ -103,7 +103,7 @@ HackRadar sends visually rich notifications including:
     ```bash
     # Create a new database (example)
     createdb hackradar
-    
+
     # Or using psql
     psql -U postgres
     CREATE DATABASE hackradar;
@@ -114,7 +114,7 @@ HackRadar sends visually rich notifications including:
     ```bash
     # Install uv if you don't have it
     curl -LsSf https://astral.sh/uv/install.sh | sh
-    
+
     # Install project dependencies
     uv pip install -e .
     ```
@@ -124,9 +124,9 @@ HackRadar sends visually rich notifications including:
     ```bash
     cp .env.example .env
     ```
-    
-    Edit `.env` and configure the following all 
-    
+
+    Edit `.env` and configure the following all
+
     **Required:**
     - `DISCORD_TOKEN`: Your Discord bot token from step 2
     - `DATABASE_URL`: PostgreSQL connection string
@@ -143,7 +143,7 @@ HackRadar sends visually rich notifications including:
     ```bash
     python bot.py
     ```
-    
+
     You should see a message confirming the bot is online and connected to your Discord server!
 
 

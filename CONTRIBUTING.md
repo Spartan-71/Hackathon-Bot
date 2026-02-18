@@ -19,7 +19,7 @@ Thank you for showing interest in contributing to **HackRadar**! We welcome all 
 
    # Install dependencies including dev dependencies
    uv sync
-   
+
    # Set up pre-commit hooks
    uv run pre-commit install
    ```
